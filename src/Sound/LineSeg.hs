@@ -21,3 +21,4 @@ lineSeg' a1 dur a2 rate rest =
   in S.switch n
         (S.iterate (+delta) a1)
         rest
+{-# INLINE lineSeg' #-}

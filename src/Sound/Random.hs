@@ -9,5 +9,5 @@ import           System.Random (RandomGen)
 
 random :: RandomGen g => g -> Audio
 random = S.unfold (R.randomR (-1,1))
-
+{-# INLINE random #-}
 

@@ -9,3 +9,4 @@ lowpass :: Double -> Audio -> Audio
 lowpass c input =
   let output = 0 <:> S.zipWith (\i o -> o + c * (i - o)) input output
   in output
+{-# INLINE lowpass #-}

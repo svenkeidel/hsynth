@@ -5,8 +5,10 @@ with pkgs.haskellPackages; cabal.mkDerivation (self: {
   version = "0.1.0.0";
   src = ./.;
   buildDepends = [
-    cabalInstall random alsaCore
-    pkgs.sox pkgs.pkgconfig
+    cabalInstall pkgs.pkgconfig ghcCore
+    random
+    alsaCore pkgs.sox
+    jack pkgs.jack2
   ];
   meta = {
     license = self.stdenv.lib.licenses.gpl3;

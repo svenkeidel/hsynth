@@ -14,4 +14,4 @@ main = do
   (dur:amp:freq:pres:breath:rt:_) <- (fmap read) <$> getArgs
   let rate = truncate rt
   g <- R.newStdGen
-  Driver.runAudio (dur+1) rate (flute dur amp freq pres breath g rate)
+  Driver.runAudio8 rate (flute dur amp freq pres breath g rate)
