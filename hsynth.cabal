@@ -17,7 +17,8 @@ flag sox
   default:     False
 
 library
-  exposed-modules:     Sound.Delay,
+  exposed-modules:     Sound.BiQuadraticFilter,
+                       Sound.Delay,
                        Sound.Discretization,
                        Sound.Flute,
                        Sound.Integral,
@@ -25,6 +26,8 @@ library
                        Sound.Lowpass,
                        Sound.Random,
                        Sound.Sinus,
+                       Sound.Time,
+                       Sound.Triangle,
                        Sound.Types,
                        Sound.Driver.StdOut
 

@@ -8,3 +8,4 @@ type Duration = Double
 type Audio = Stream Double
 type Amplitude = Double
 type Envelope = Stream Double
+type Resonance = Double
