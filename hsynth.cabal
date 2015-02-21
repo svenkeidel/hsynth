@@ -17,22 +17,25 @@ flag sox
   default:     False
 
 library
-  exposed-modules:     Sound.BiQuadraticFilter,
+  exposed-modules:     Data.Stream,
+                       Data.Stream.IO,
+                       Sound.BaseDrum,
+                       Sound.BiQuadraticFilter,
                        Sound.Delay,
-                       Sound.Discretization,
                        Sound.Flute,
                        Sound.Integral,
                        Sound.LineSeg,
                        Sound.Lowpass,
+                       Sound.Quantization,
                        Sound.Random,
                        Sound.Sinus,
+                       Sound.Saw,
                        Sound.Time,
                        Sound.Triangle,
                        Sound.Types,
                        Sound.Driver.StdOut
-
-  other-modules:       Data.Stream
   build-depends:       base >=4.7 && <4.8,
+                       bytestring,
                        random
   ghc-options:         -Wall -O2 -ddump-rule-firings
   hs-source-dirs:      src

@@ -10,7 +10,7 @@ import           Sound.Integral
 
 oscSine :: Frequency -> Rate -> Audio -> Audio
 oscSine f0 rate =
-      fmap (\freq -> (f0 * (2 ** freq)))
+      fmap (\freq -> 2 * pi * f0 * 2**freq)
   >>> integral rate
   >>> fmap sin
 {-# INLINE oscSine #-}

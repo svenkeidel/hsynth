@@ -1,25 +1,35 @@
 module Sound.Driver.StdOut where
 
-import           Control.Exception (bracket)
+import           Prelude hiding (concat)
 
+import           Data.Monoid (mappend)
 import           Data.Stream (Stream(..))
+import           Data.ByteString.Lazy.Builder
 
-import           Foreign.Marshal.Array(mallocArray,advancePtr)
-import           Foreign.Marshal.Alloc(free)
-import           Foreign.Storable (Storable,poke)
-import           Foreign.Ptr (Ptr)
+import           Sound.Quantization
 
-import           Sound.Discretization
-import           Sound.Types
-
-import           System.IO (Handle,stdout,hPutBuf)
+import           System.IO (Handle,stdout)
 
 type ChunkSize = Int
 
-runAudio8 :: Rate -> Stream Double -> IO ()
-runAudio8 rate stream = hRunAudio stdout 1024 rate (fmap discretize8 stream)
-{-# INLINE runAudio8 #-}
+{-runAudio8 :: Rate -> Stream Double -> IO ()-}
+{-runAudio8 rate stream = hRunAudio stdout 1024 rate (fmap quantizeUnsigned8 stream)-}
+{-[># INLINE runAudio8 #<]-}
 
+runAudio16 :: Stream Double -> IO ()
+runAudio16 = hRunAudio stdout . fmap (int16LE . quantizeSigned16)
+{-# INLINE runAudio16 #-}
+
+{-runAudio32 :: Rate -> Stream Double -> IO ()-}
+{-runAudio32 rate stream = hRunAudio stdout 1024 rate (fmap quantizeSigned32 stream)-}
+
+hRunAudio :: Handle -> Stream Builder -> IO ()
+hRunAudio handle stream = hPutBuilder handle (concat stream)
+
+concat :: Stream Builder -> Builder
+concat (Cons a as) = a `mappend` (concat as)
+
+{-
 hRunAudio :: Storable a => Handle -> ChunkSize -> Rate -> Stream a -> IO ()
 hRunAudio handle chunkSize _ stream =
   bracket (mallocArray chunkSize) free $ \buffer ->
@@ -46,3 +56,4 @@ pokeStream n ptr (Cons a as) = do
     {-$ fmap discretize16 stream-}
   {-where-}
     {-numberOfSamples = truncate (dur * fromIntegral rate)-}
+-}

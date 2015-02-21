@@ -14,8 +14,8 @@ import           Sound.Types
 runAudio :: Rate -> Stream Double -> IO ()
 runAudio rate stream = do
   _ <- Sox.simple (\handle stream' -> StdOut.hRunAudio handle 1024 rate stream') format rate
-    (fmap discretize8 stream)
+    (fmap quantizeSigned16 stream)
   return ()
   where
     format = Sox.numberOfChannels 1
-          <> Sox.format Sox.unsignedByte
+          <> Sox.format Sox.signedByte

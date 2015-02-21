@@ -1,6 +1,5 @@
 module Sound.Lowpass where
 
-import           Data.Stream ((<:>))
 import qualified Data.Stream as S
 
 import           Sound.Types

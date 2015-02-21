@@ -114,9 +114,11 @@ take :: Int -> Stream a -> [a]
 take 0 _           = []
 take n (Cons x xs) = x : take (n-1) xs
 
+-- This law does not hold !!!!
+--"fmap/scan"        forall f g as z. map f (scan g z as) = scan (\a b -> f (g a b)) z as
+
 {-# RULES
 "scan/fmap"        forall f g as z. scan f z (map g as) = scan (\a b -> f a (g b)) z as
-"fmap/scan"        forall f g as z. map f (scan g z as) = scan (\a b -> f (g a b)) z as
 "iterate/fmap"     forall f g z. map f (iterate g z) = iterate (f . g) (f z)
 "repeat/fmap"      forall f a. map f (repeat a) = repeat (f a)
 "unfold/fmap"      forall f g z. map f (unfold g z) = unfold (g >>> first f) z

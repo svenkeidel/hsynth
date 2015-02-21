@@ -3,7 +3,6 @@ module Sound.BiQuadraticFilter where
 import qualified Data.Stream as S
 
 import           Sound.Types
-import           Sound.Delay
 
 type A0 = Double
 type A1 = Double

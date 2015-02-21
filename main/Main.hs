@@ -2,8 +2,11 @@ module Main where
 
 import           Control.Applicative
 
+import qualified Data.Stream as S
+
 import qualified Sound.Driver.StdOut as Driver
-import qualified Sound.Sinus as S
+import           Sound.BaseDrum
+import           Sound.Sinus
 import           Sound.Flute
 
 import           System.Environment (getArgs)
@@ -11,7 +14,13 @@ import qualified System.Random as R
 
 
 main = do
-  (dur:amp:freq:pres:breath:rt:_) <- (fmap read) <$> getArgs
+  {-(amp:freq:rt:_) <- (fmap read) <$> getArgs-}
+  (freq:rt:_) <- (fmap read) <$> getArgs
   let rate = truncate rt
-  g <- R.newStdGen
-  Driver.runAudio8 rate (flute dur amp freq pres breath g rate)
+  Driver.runAudio16 (0.5 * kickDrum freq rate)
+  {-Driver.runAudio16 (0.5 * oscSine freq rate (S.repeat 0))-}
+  {-Driver.runAudio16 (0.5 * oscSine freq rate (sinA 0.01 rate))-}
+  {-Driver.runAudio8 rate (lowpass c (0.5 * (triangle freq rate)))-}
+  {-Driver.runAudio16 (0.5 * (sinA freq rate))-}
+  {-g <- R.newStdGen-}
+  {-Driver.runAudio16 (flute 5 0.5 440 0.9 0.02 g rate)-}

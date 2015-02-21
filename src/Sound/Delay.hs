@@ -1,6 +1,6 @@
 module Sound.Delay where
 
-import           Data.Stream (Stream(..),(<:>))
+import           Data.Stream (Stream(..))
 import qualified Data.Stream as S
 
 import           Sound.Types
