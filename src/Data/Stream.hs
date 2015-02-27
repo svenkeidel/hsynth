@@ -14,6 +14,13 @@ map :: (a -> b) -> Stream a -> Stream b
 map f (Cons x xs) = Cons (f x) (map f xs)
 {-# NOINLINE map #-}
 
+mapMaybe :: (a -> Maybe b) -> Stream a -> Stream b
+mapMaybe f (Cons a as) =
+  case f a of
+    Just b  -> Cons b (mapMaybe f as)
+    Nothing -> mapMaybe f as
+{-# NOINLINE mapMaybe #-}
+
 instance Functor Stream where
   fmap = map
 
