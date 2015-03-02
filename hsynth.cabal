@@ -19,6 +19,9 @@ flag sox
 library
   exposed-modules:     Data.Stream,
                        Data.Stream.IO,
+                       Music.Composition,
+                       Music.Note,
+                       Music.Rest,
                        Music.Pitch,
                        Music.Tempo,
                        Sound.BaseDrum,

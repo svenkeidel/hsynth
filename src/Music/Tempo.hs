@@ -2,10 +2,10 @@ module Music.Tempo where
 
 import Sound.Types (Time)
 
-data BPM = BPM Int Beat
-type Beat = Rational
+data BPM = BPM Int Length
+type Length = Rational
 
-beatToTime :: BPM -> Beat -> Time
+beatToTime :: BPM -> Rational -> Time
 beatToTime (BPM bpm tick) beat =
   fromIntegral bpm * fromRational beat
     / (fromRational tick * 60)
