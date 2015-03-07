@@ -5,26 +5,44 @@ import           Music.Types
 
 newtype Rest = Rest Duration
 
-doubleWholeRest, breveRest :: Rest
-doubleWholeRest = Rest 2
+class IsRest r where
+  mkRest :: Rational -> r
+
+instance IsRest Rest where
+  mkRest = Rest
+
+doubleWholeRest, breveRest :: IsRest r => r
+doubleWholeRest = mkRest 2
 breveRest = doubleWholeRest
+{-# INLINE doubleWholeRest #-}
+{-# INLINE breveRest #-}
 
-wholeRest, semibreveRest :: Rest
-wholeRest = Rest 1
+wholeRest, semibreveRest :: IsRest r => r
+wholeRest = mkRest 1
 semibreveRest = wholeRest
+{-# INLINE wholeRest #-}
+{-# INLINE semibreveRest #-}
 
-halfRest, minimRest :: Rest
-halfRest = Rest (1%2)
+halfRest, minimRest :: IsRest r => r
+halfRest = mkRest (1%2)
 minimRest = halfRest
+{-# INLINE halfRest #-}
+{-# INLINE minimRest #-}
 
-quarterRest, crotchetRest :: Rest
-quarterRest = Rest (1%4)
+quarterRest, crotchetRest :: IsRest r => r
+quarterRest = mkRest (1%4)
 crotchetRest = quarterRest
+{-# INLINE quarterRest #-}
+{-# INLINE crotchetRest #-}
 
-eighthRest, quaverRest :: Rest
-eighthRest = Rest (1%8)
+eighthRest, quaverRest :: IsRest r => r
+eighthRest = mkRest (1%8)
 quaverRest = eighthRest
+{-# INLINE eighthRest #-}
+{-# INLINE quaverRest #-}
 
-sixteenthRest, semiquaverRest :: Rest
-sixteenthRest = Rest (1%16)
+sixteenthRest, semiquaverRest :: IsRest r => r
+sixteenthRest = mkRest (1%16)
 semiquaverRest = sixteenthRest
+{-# INLINE sixteenthRest #-}
+{-# INLINE semiquaverRest #-}
