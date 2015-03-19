@@ -1,12 +1,21 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Music.Pitch where
 
 import Sound.Types (Frequency)
 
-newtype Pitch = Pitch Int
+type Octave = Int
+
+-- An alternative representation for equal temperament is `newtype Pitch = Pitch Int`.
+-- Although this representation does not allow to represent commas.
+-- See: http://en.wikipedia.org/wiki/Comma_(music)
+data Pitch = Pitch PitchClass Octave
+
+pitch :: PitchClass -> Octave -> Pitch
+pitch = Pitch
 
 instance Show Pitch where
-  show p@(Pitch n) =
-    show (pitchClass p) ++ show (div n 12)
+  show p@(Pitch pitchClass octave) =
+    show pitchClass ++ show octave
 
 data PitchClass
   = Cff | Cf | C | Cs | Css
@@ -32,8 +41,10 @@ instance Show PitchClass where
       s = (++ "♯")
       ss = s . s
 
-pitchClassToInt :: PitchClass -> Int
-pitchClassToInt pc = case pc of
+type Ordinal = Int
+
+pitchClassOrdinal :: PitchClass -> Ordinal
+pitchClassOrdinal pc = case pc of
     Cff -> -2; Cf -> -1; C ->  0; Cs ->  1; Css ->  2
     Dff ->  0; Df ->  1; D ->  2; Ds ->  3; Dss ->  4
     Eff ->  2; Ef ->  3; E ->  4; Es ->  5; Ess ->  6
@@ -42,30 +53,30 @@ pitchClassToInt pc = case pc of
     Aff ->  7; Af ->  8; A ->  9; As -> 10; Ass -> 11
     Bff ->  9; Bf -> 10; B -> 11; Bs -> 12; Bss -> 13 
 
-pitchClass :: Pitch -> PitchClass
-pitchClass (Pitch p) = [C,Cs,D,Ds,E,F,Fs,G,Gs,A,As,B] !! (p `mod` 12)
-{-# INLINE pitchClass #-}
+-- pitchClass :: Pitch -> PitchClass
+-- pitchClass (Pitch p) = [C,Cs,D,Ds,E,F,Fs,G,Gs,A,As,B] !! (p `mod` 12)
+-- {-# INLINE pitchClass #-}
+-- 
+-- transpose :: Int -> Pitch -> Pitch
+-- transpose i (Pitch n) = Pitch (n+i)
+-- {-# INLINE transpose #-}
+-- 
+-- type Octave = Int
+--   
+-- pitch :: PitchClass -> Octave -> Pitch
+-- pitch pc octave = Pitch $ pitchClassToInt pc + octave * 12
+-- {-# INLINE pitch #-}
 
-transpose :: Int -> Pitch -> Pitch
-transpose i (Pitch n) = Pitch (n+i)
-{-# INLINE transpose #-}
-
-type Octave = Int
-  
-pitch :: PitchClass -> Octave -> Pitch
-pitch pc octave = Pitch $ pitchClassToInt pc + octave * 12
-{-# INLINE pitch #-}
-
-pitchToFrequency440 :: Pitch -> Frequency
-pitchToFrequency440 = pitchToFrequency 440
-{-# INLINE pitchToFrequency440 #-}
-
-type ConcertPitch = Frequency
-
-pitchToFrequency :: ConcertPitch -> Pitch -> Frequency
-pitchToFrequency concertPitch (Pitch n) =
-  2 ** ((n'-57)/12) * concertPitch
-  where
-    n' = fromIntegral n
-{-# INLINE pitchToFrequency #-}
+-- pitchToFrequency440 :: Pitch -> Frequency
+-- pitchToFrequency440 = pitchToFrequency 440
+-- {-# INLINE pitchToFrequency440 #-}
+-- 
+-- type ConcertPitch = Frequency
+-- 
+-- pitchToFrequency :: ConcertPitch -> Pitch -> Frequency
+-- pitchToFrequency concertPitch (Pitch n) =
+--   2 ** ((n'-57)/12) * concertPitch
+--   where
+--     n' = fromIntegral n
+-- {-# INLINE pitchToFrequency #-}
 
