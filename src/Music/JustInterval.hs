@@ -2,17 +2,7 @@
 module Music.JustInterval where
 
 import Data.Ratio ((%))
-
--- A Just interval is a small ratio between two frequencies
-newtype Interval = Interval Rational
-
-type Cent = Double
-
-cents :: Interval -> Cent
-cents (Interval rat) = 1200 * logBase 2 (fromRational rat)
-
-ratio :: Interval -> Rational
-ratio (Interval rat) = rat
+import Music.Interval
 
 perfectUnison :: Interval
 perfectUnison = Interval (1%1)

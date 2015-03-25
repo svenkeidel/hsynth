@@ -21,6 +21,7 @@ library
                        Data.Stream.IO,
                        Music.Composition,
                        --Music.Chord,
+                       Music.Interval,
                        Music.JustInterval,
                        Music.Note,
                        Music.Rest,

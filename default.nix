@@ -8,7 +8,7 @@ with pkgs.haskellPackages; cabal.mkDerivation (self: {
     cabalInstall pkgs.pkgconfig ghcCore
     random
     alsaCore pkgs.sox
-    jack pkgs.jack2
+    jack pkgs.jack2 pkgs.jackmeter
   ];
   meta = {
     license = self.stdenv.lib.licenses.gpl3;

@@ -43,8 +43,8 @@ instance Show PitchClass where
 
 type Ordinal = Int
 
-pitchClassOrdinal :: PitchClass -> Ordinal
-pitchClassOrdinal pc = case pc of
+equalTemperament :: PitchClass -> Ordinal
+equalTemperament pc = case pc of
     Cff -> -2; Cf -> -1; C ->  0; Cs ->  1; Css ->  2
     Dff ->  0; Df ->  1; D ->  2; Ds ->  3; Dss ->  4
     Eff ->  2; Ef ->  3; E ->  4; Es ->  5; Ess ->  6
@@ -53,9 +53,32 @@ pitchClassOrdinal pc = case pc of
     Aff ->  7; Af ->  8; A ->  9; As -> 10; Ass -> 11
     Bff ->  9; Bf -> 10; B -> 11; Bs -> 12; Bss -> 13 
 
--- pitchClass :: Pitch -> PitchClass
--- pitchClass (Pitch p) = [C,Cs,D,Ds,E,F,Fs,G,Gs,A,As,B] !! (p `mod` 12)
--- {-# INLINE pitchClass #-}
+sharp :: Ordinal -> PitchClass
+sharp p = [C,Cs,D,Ds,E,F,Fs,G,Gs,A,As,B] !! (p `mod` 12)
+{-# INLINE sharp #-}
+
+flat :: Ordinal -> PitchClass
+flat p = [C,Df,D,Ef,E,F,Gf,G,Af,A,Bf,B] !! (p `mod` 12)
+{-# INLINE flat #-}
+
+type Semitones = Int
+
+reorder :: Semitones -> Ordinal -> Ordinal
+reorder semitones o = (o * semitones) `mod` 7 + 7 * (o `div` 7)
+
+shift :: Int -> Ordinal -> Ordinal
+shift n o = o - n
+
+vertical :: PitchClass -> Ordinal
+vertical pc = case pc of
+    Cff -> 0; Cf ->  7; C -> 14; Cs -> 21; Css -> 28
+    Dff -> 1; Df ->  8; D -> 15; Ds -> 22; Dss -> 29
+    Eff -> 2; Ef ->  9; E -> 16; Es -> 23; Ess -> 30
+    Fff -> 3; Ff -> 10; F -> 17; Fs -> 24; Fss -> 31
+    Gff -> 4; Gf -> 11; G -> 18; Gs -> 25; Gss -> 32
+    Aff -> 5; Af -> 12; A -> 19; As -> 26; Ass -> 33
+    Bff -> 6; Bf -> 13; B -> 20; Bs -> 27; Bss -> 34
+
 -- 
 -- transpose :: Int -> Pitch -> Pitch
 -- transpose i (Pitch n) = Pitch (n+i)
