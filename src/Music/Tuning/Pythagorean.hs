@@ -7,22 +7,32 @@ import           Data.Monoid
 import           Data.Foldable (Foldable)
 import qualified Data.Foldable as F
 import           Music.Interval
+import           Music.JustInterval
 import           Music.Pitch
+import           Sound.Types
 
-type Generator = Interval
+data PythagoreanTuning =
+  PythagoreanTuning
+  { generator :: Interval
+  , order :: PitchClass -> Ordinal
+  , baseFrequency :: Frequency
+  }
 
-pythagorean :: Generator -> PitchClass -> Interval
-pythagorean gen pc =
-  let i = ord pc
+threeLimit :: PythagoreanTuning
+threeLimit =
+  PythagoreanTuning
+  { generator = perfectFifth
+  , order = vertical >>> reorder 9 >>> shift 17
+  , baseFrequency = 440
+  }
+
+pythagorean :: PythagoreanTuning -> Pitch -> Interval
+pythagorean tuning (Pitch pc octave) =
+  let i = order tuning pc
       i' = fromIntegral i :: Double
       k = if i < 0 then truncate ((-i'+2) / 2) else negate (truncate (i'/2)) :: Int
-      g = ratio gen
-  in Interval (g^^i * 2^^k)
-
-ord :: PitchClass -> Ordinal
--- reorder 9: reorder that perfect fifth have adjacent oridnal numbers
--- shift 16: shift oridnal numbers s.t. D has ordinal 0
-ord = vertical >>> reorder 9 >>> shift 16
+      g = ratio (generator tuning)
+  in (g^^i * 2^^k)
 
 notes = Table LeftAlign
   [ [ Cff, Cf, C, Cs, Css ]

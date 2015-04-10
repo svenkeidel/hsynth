@@ -27,6 +27,7 @@ library
                        Music.Rest,
                        Music.Pitch,
                        Music.Tempo,
+                       Music.Tuning.EqualTemperament,
                        Music.Tuning.Pythagorean,
                        Sound.BaseDrum,
                        Sound.BiQuadraticFilter,
@@ -46,7 +47,8 @@ library
                        Sound.Driver.StdOut
   build-depends:       base >=4.7 && <4.8,
                        bytestring,
-                       random
+                       random,
+                       tabular
   ghc-options:         -Wall -O2 -ddump-rule-firings
   hs-source-dirs:      src
   default-language:    Haskell2010

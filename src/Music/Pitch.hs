@@ -43,16 +43,6 @@ instance Show PitchClass where
 
 type Ordinal = Int
 
-equalTemperament :: PitchClass -> Ordinal
-equalTemperament pc = case pc of
-    Cff -> -2; Cf -> -1; C ->  0; Cs ->  1; Css ->  2
-    Dff ->  0; Df ->  1; D ->  2; Ds ->  3; Dss ->  4
-    Eff ->  2; Ef ->  3; E ->  4; Es ->  5; Ess ->  6
-    Fff ->  3; Ff ->  4; F ->  5; Fs ->  6; Fss ->  7
-    Gff ->  5; Gf ->  6; G ->  7; Gs ->  8; Gss ->  9
-    Aff ->  7; Af ->  8; A ->  9; As -> 10; Ass -> 11
-    Bff ->  9; Bf -> 10; B -> 11; Bs -> 12; Bss -> 13 
-
 sharp :: Ordinal -> PitchClass
 sharp p = [C,Cs,D,Ds,E,F,Fs,G,Gs,A,As,B] !! (p `mod` 12)
 {-# INLINE sharp #-}
