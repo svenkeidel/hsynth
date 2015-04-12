@@ -1,9 +1,11 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Music.Interval where
 
 import           Data.Ratio
 
 -- A Just interval is a ratio between two frequencies
 newtype Interval = Interval Rational
+  deriving (Num,Eq,Ord,Real)
 
 instance Show Interval where
   show (Interval i) = concat [show (numerator i), ":", show (denominator i)]

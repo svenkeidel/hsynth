@@ -1,8 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Music.Pitch where
 
-import Sound.Types (Frequency)
-
 type Octave = Int
 
 -- An alternative representation for equal temperament is `newtype Pitch = Pitch Int`.
@@ -14,7 +12,7 @@ pitch :: PitchClass -> Octave -> Pitch
 pitch = Pitch
 
 instance Show Pitch where
-  show p@(Pitch pitchClass octave) =
+  show (Pitch pitchClass octave) =
     show pitchClass ++ show octave
 
 data PitchClass
@@ -61,13 +59,23 @@ shift n o = o - n
 
 vertical :: PitchClass -> Ordinal
 vertical pc = case pc of
-    Cff -> 0; Cf ->  7; C -> 14; Cs -> 21; Css -> 28
-    Dff -> 1; Df ->  8; D -> 15; Ds -> 22; Dss -> 29
-    Eff -> 2; Ef ->  9; E -> 16; Es -> 23; Ess -> 30
-    Fff -> 3; Ff -> 10; F -> 17; Fs -> 24; Fss -> 31
-    Gff -> 4; Gf -> 11; G -> 18; Gs -> 25; Gss -> 32
-    Aff -> 5; Af -> 12; A -> 19; As -> 26; Ass -> 33
-    Bff -> 6; Bf -> 13; B -> 20; Bs -> 27; Bss -> 34
+    Cff ->  0; Cf ->  7; C -> 14; Cs -> 21; Css -> 28
+    Dff ->  1; Df ->  8; D -> 15; Ds -> 22; Dss -> 29
+    Eff ->  2; Ef ->  9; E -> 16; Es -> 23; Ess -> 30
+    Fff -> -4; Ff ->  3; F -> 10; Fs -> 17; Fss -> 24
+    Gff ->  4; Gf -> 11; G -> 18; Gs -> 25; Gss -> 32
+    Aff ->  5; Af -> 12; A -> 19; As -> 26; Ass -> 33
+    Bff ->  6; Bf -> 13; B -> 20; Bs -> 27; Bss -> 34
+
+horizontal :: PitchClass -> Int
+horizontal pc = case pc of
+    Cff -> -2; Cf -> -1; C ->  0; Cs ->  1; Css ->  2
+    Dff ->  0; Df ->  1; D ->  2; Ds ->  3; Dss ->  4
+    Eff ->  2; Ef ->  3; E ->  4; Es ->  5; Ess ->  6
+    Fff ->  3; Ff ->  4; F ->  5; Fs ->  6; Fss ->  7
+    Gff ->  5; Gf ->  6; G ->  7; Gs ->  8; Gss ->  9
+    Aff ->  7; Af ->  8; A ->  9; As -> 10; Ass -> 11
+    Bff ->  9; Bf -> 10; B -> 11; Bs -> 12; Bss -> 13 
 
 -- 
 -- transpose :: Int -> Pitch -> Pitch

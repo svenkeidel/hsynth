@@ -9,31 +9,39 @@ import qualified Data.Foldable as F
 import           Music.Interval
 import           Music.JustInterval
 import           Music.Pitch
+import           Music.ConcertPitch (ConcertPitch(..))
 import           Sound.Types
 
 data PythagoreanTuning =
   PythagoreanTuning
   { generator :: Interval
   , order :: PitchClass -> Ordinal
-  , baseFrequency :: Frequency
   }
 
 threeLimit :: PythagoreanTuning
 threeLimit =
   PythagoreanTuning
   { generator = perfectFifth
-  , order = vertical >>> reorder 9 >>> shift 17
-  , baseFrequency = 440
+  , order = vertical >>> reorder 9 >>> shift 14
   }
 
-pythagorean :: PythagoreanTuning -> Pitch -> Interval
-pythagorean tuning (Pitch pc octave) =
+pythagoreanInterval :: PythagoreanTuning -> PitchClass -> Interval
+pythagoreanInterval tuning pc =
   let i = order tuning pc
       i' = fromIntegral i :: Double
       k = if i < 0 then truncate ((-i'+2) / 2) else negate (truncate (i'/2)) :: Int
       g = ratio (generator tuning)
-  in (g^^i * 2^^k)
+  in Interval (g^^i * 2^^k)
 
+pythagorean :: PythagoreanTuning -> ConcertPitch -> Pitch -> Frequency
+pythagorean tuning (ConcertPitch (Pitch cpc cpOct) cpFreq) (Pitch pc octave) =
+  let (Interval i) = pythagoreanInterval tuning pc
+  in 2^^octave * c0 * fromRational i
+  where
+    c0 :: Frequency
+    c0 = cpFreq / (realToFrac (pythagoreanInterval tuning cpc) * 2^^(cpOct::Int))
+
+notes :: Table PitchClass
 notes = Table LeftAlign
   [ [ Cff, Cf, C, Cs, Css ]
   , [ Dff, Df, D, Ds, Dss ]
