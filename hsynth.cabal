@@ -47,6 +47,7 @@ library
                        Sound.Types,
                        Sound.Driver.StdOut
   build-depends:       base >=4.7 && <4.8,
+                       binary,
                        bytestring,
                        random
   ghc-options:         -Wall -O2 -ddump-rule-firings
