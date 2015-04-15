@@ -29,6 +29,7 @@ library
                        Music.Tempo,
                        Music.Tuning.EqualTemperament,
                        Music.Tuning.Pythagorean,
+                       Music.Midi,
                        Sound.BaseDrum,
                        Sound.BiQuadraticFilter,
                        Sound.Composition,
