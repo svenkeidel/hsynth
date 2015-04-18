@@ -1,6 +1,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Music.Pitch where
 
+import qualified Music.Midi as Midi
+
 type Octave = Int
 
 -- An alternative representation for equal temperament is `newtype Pitch = Pitch Int`.
@@ -48,6 +50,11 @@ sharp p = [C,Cs,D,Ds,E,F,Fs,G,Gs,A,As,B] !! (p `mod` 12)
 flat :: Ordinal -> PitchClass
 flat p = [C,Df,D,Ef,E,F,Gf,G,Af,A,Bf,B] !! (p `mod` 12)
 {-# INLINE flat #-}
+
+fromMidiPitch :: Midi.Pitch -> Pitch
+fromMidiPitch midiPitch =
+  let mp = fromIntegral midiPitch
+  in pitch (sharp mp) (mp `div` 12)
 
 type Semitones = Int
 

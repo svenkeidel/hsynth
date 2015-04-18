@@ -8,55 +8,70 @@ import           Control.Monad.Trans
 import           Control.Monad.Exception.Synchronous
 
 import           Data.Array.Storable (writeArray)
+import qualified Data.ByteString.Lazy as B
 
 import           Foreign.C.Types (CFloat(..))
 import           Foreign.C.Error(Errno)
 
 import           GHC.Float
 
-import           Sound.JACK (NFrames(..),Output)
+import           Sound.JACK (NFrames(..),Output,Input)
 import           Sound.JACK.Audio (Port)
 import qualified Sound.JACK.Audio as Audio
 import qualified Sound.JACK as JACK
+import qualified Sound.JACK.MIDI as MIDI
 
-import           Data.Stream (Stream(..))
+import qualified Data.Stream as S
 import           Sound.Types
 
-type AudioSig = MVar Audio
+import           Music.Midi
+import           Music.VoiceMap
 
-runAudio :: Audio -> IO ()
+type Synthesizer = MVar VoiceMap
+
+runAudio :: VoiceMap -> IO ()
 runAudio f = do
   sig <- newMVar f
   start "hsynth" sig
 
-start :: String -> AudioSig -> IO ()
-start name signal = do
+start :: String -> Synthesizer -> IO ()
+start name synth = do
   JACK.handleExceptions $
       JACK.withClientDefault name $ \client ->
-      JACK.withPort client "output" $ \output ->
-      JACK.withProcess client (render signal output) $
-          JACK.withActivation client $ lift $ do
-              putStrLn $ "started " ++ name ++ "..."
-              JACK.waitForBreak
+      MIDI.withPort client "input" $ \input ->
+      JACK.withPort client "output" $ \output -> do
+        rate <- lift $ JACK.getSampleRate client
+        JACK.withProcess client (render synth input output rate) $
+            JACK.withActivation client $ lift $ do
+                putStrLn $ "started " ++ name ++ "..."
+                JACK.waitForBreak
 
-render :: AudioSig -> Port Output -> NFrames -> ExceptionalT Errno IO ()
-render signal output nframes@(NFrames n) = lift $ do
-  out <- Audio.getBufferArray output nframes
-  modifyMVar_ signal $ write out 0
+render :: Synthesizer -> MIDI.Port Input -> Port Output -> Rate -> NFrames -> ExceptionalT Errno IO ()
+render synth input output rate nframes@(NFrames n) = do
+  rawMidiEvents <- MIDI.readRawEventsFromPort input nframes
+  let midiMsgs = concat $ map (getMessages . B.fromStrict . MIDI.rawEventBuffer) rawMidiEvents
+  lift $ do
+    {-print midiMsgs-}
+    out <- Audio.getBufferArray output nframes
+    modifyMVar_ synth $ \vm -> do
+      let vm' = foldr (interpret rate) vm midiMsgs
+      {-print vm'-}
+      let (sample,vm'') = mapAccumNotes mixSample emptySample vm'
+      write out 0 sample
+      return vm''
   where
-    write out i (Cons amp sig) | i < n = do
+    emptySample = replicate (fromIntegral n) 0
+
+    mixSample :: [Double] -> Audio -> ([Double],Audio)
+    mixSample sample audio = 
+      let (sample',audio') = S.splitAt (fromIntegral n) audio
+      in (zipWith (+) sample sample',audio')
+
+    write out i (amp:samp) | i < n = do
       writeArray out (NFrames i) (double2CFloat amp)
-      write out (i+1) sig
-    write _   _ sig = return sig
+      write out (i+1) samp
+    write _ _ _ = return ()
 
 double2CFloat :: Double -> CFloat
 double2CFloat x = CFloat (double2Float x)
 {-# INLINE double2CFloat #-}
-
-{-mapMidi :: [Message.T] -> [Event]-}
-{-mapMidi ((Message.Channel (Channel.Cons _ (Channel.Voice (Voice.NoteOn pitch velocity)))):msgs) = -}
-  {-NoteOn (Voice.fromPitch pitch) (Voice.fromVelocity velocity) : mapMidi msgs-}
-{-mapMidi ((Message.Channel (Channel.Cons _ (Channel.Voice (Voice.NoteOff pitch velocity)))):msgs) = -}
-  {-NoteOff (Voice.fromPitch pitch) (Voice.fromVelocity velocity) : mapMidi msgs-}
-{-mapMidi (_:msgs) = mapMidi msgs-}
-{-mapMidi [] = []-}

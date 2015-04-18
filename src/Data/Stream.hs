@@ -1,6 +1,6 @@
 module Data.Stream where
 
-import Prelude hiding ((!!),iterate,zipWith,zipWith3,head,tail,repeat,take,map)
+import Prelude hiding ((!!),iterate,zipWith,zipWith3,head,tail,repeat,take,splitAt,map)
 import Control.Arrow
 
 data Stream a = Cons !a (Stream a)
@@ -120,6 +120,12 @@ infixl 9 !!
 take :: Int -> Stream a -> [a]
 take 0 _           = []
 take n (Cons x xs) = x : take (n-1) xs
+
+splitAt :: Int -> Stream a -> ([a], Stream a)
+splitAt 0 xs          = ([],xs)
+splitAt n (Cons x xs) =
+  let (l,ys) = splitAt (n-1) xs
+  in (x:l,ys)
 
 -- This law does not hold !!!!
 --"fmap/scan"        forall f g as z. map f (scan g z as) = scan (\a b -> f (g a b)) z as
