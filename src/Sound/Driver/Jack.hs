@@ -57,7 +57,7 @@ render synth input output rate nframes@(NFrames n) = do
       let vm' = foldr (interpret rate) vm midiMsgs
       {-print vm'-}
       let (sample,vm'') = mapAccumNotes mixSample emptySample vm'
-      write out 0 sample
+      write out 0 (if size vm'' == 0 then sample else map (/ fromIntegral (size vm'')) sample)
       return vm''
   where
     emptySample = replicate (fromIntegral n) 0
