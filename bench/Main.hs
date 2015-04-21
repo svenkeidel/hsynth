@@ -1,12 +1,13 @@
 module Main where
 
+{-import           Control.Monad.Primitive-}
 import           Criterion.Main
 
 import qualified Data.Stream as S
 import           Data.Vector (Vector)
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
-import qualified Data.Vector.Mutable as VM
+import qualified Data.Vector.Primitive as VP
 import qualified Data.List as L
 
 import           Music.ConcertPitch (a440)
@@ -37,7 +38,8 @@ main = do
       [ bench "single values/Vector" $ nf (getVector benchSize) vm
       , bench "single values/List" $ nf (getList benchSize) vm
       , bench "batch/Vector"  $ nf (fst . batchVector benchSize) vm
-      , bench "batch/Vector Storable"  $ nf (fst . batchVectorStorable benchSize) vm
+      , bench "batch/Vector/Storable"  $ nf (fst . batchVectorStorable benchSize) vm
+      , bench "batch/Vector/Primitive"  $ nf (fst . batchVectorPrimitive benchSize) vm
       , bench "batch/List"  $ nf (fst . batchList benchSize) vm
       ]
     ]
@@ -90,24 +92,11 @@ main = do
 
     --
 
-    batchVectorMutable :: PrimMonad m => Int -> VoiceMap -> m (VM.MVector (PrimState m) Double,VoiceMap)
-    batchVectorMutable n vm = do
-      vec <- VM.replicate n 0
-      VM.mapAccumNotesM (mixSampleMutable n) vec vm
+    batchVectorPrimitive :: Int -> VoiceMap -> (VP.Vector Double,VoiceMap)
+    batchVectorPrimitive n vm =
+      VM.mapAccumNotes (mixSampleVectorPrimitive n) (VP.replicate n 0) vm
 
-    mixSampleStorable :: PrimMonad m => Int -> m (VM.MVector (PrimState m) Double) -> Audio -> (m (VM.MVector (PrimState m) Double), Audio)
-    mixSampleStorable n sample audio = 
+    mixSampleVectorPrimitive :: Int -> VP.Vector Double -> Audio -> (VP.Vector Double, Audio)
+    mixSampleVectorPrimitive n sample audio = 
       let (sample',audio') = S.splitAt (fromIntegral n) audio
-          vecM = do
-            s <- sample
-            zipAdd s sample'
-      in (vecM,audio')
-
-    zipAdd :: PrimState m => Int -> VM.MVector (PrimState m) Double -> [Double] -> m (VM.MVector (PrimState m) Double)
-    zipAdd n vec sample = go 0 sample
-      where
-        go m (x:xs) = do
-          y <- VM.unsafeRead vec m
-          VM.unsafeWrite vec m (y+x)
-          go (m+1) xs
-        go _ _ = return ()
+      in (VP.zipWith (+) sample (VP.fromList sample'),audio')

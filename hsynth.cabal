@@ -101,6 +101,7 @@ benchmark bench
   build-depends:       base,
                        criterion,
                        hsynth,
+                       primitive,
                        vector,
                        random
   ghc-options:         -Wall

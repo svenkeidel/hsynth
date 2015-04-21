@@ -9,6 +9,8 @@ import           Control.Monad.Exception.Synchronous
 
 import           Data.Array.Storable (writeArray)
 import qualified Data.ByteString.Lazy as B
+import           Data.Vector.Primitive (Vector)
+import qualified Data.Vector.Primitive as V
 
 import           Foreign.C.Types (CFloat(..))
 import           Foreign.C.Error(Errno)
@@ -55,17 +57,16 @@ render synth input output rate nframes@(NFrames n) = do
     out <- Audio.getBufferArray output nframes
     modifyMVar_ synth $ \vm -> do
       let vm' = foldr (interpret rate) vm midiMsgs
-      {-print vm'-}
       let (sample,vm'') = mapAccumNotes mixSample emptySample vm'
-      write out 0 (if size vm'' == 0 then sample else map (/ fromIntegral (size vm'')) sample)
+      write out 0 (V.toList (if size vm'' == 0 then sample else V.map (/ fromIntegral (size vm'')) sample))
       return vm''
   where
-    emptySample = replicate (fromIntegral n) 0
+    emptySample = V.replicate (fromIntegral n) 0
 
-    mixSample :: [Double] -> Audio -> ([Double],Audio)
+    mixSample :: Vector Double -> Audio -> (Vector Double, Audio)
     mixSample sample audio = 
       let (sample',audio') = S.splitAt (fromIntegral n) audio
-      in (zipWith (+) sample sample',audio')
+      in (V.zipWith (+) sample (V.fromList sample'),audio')
 
     write out i (amp:samp) | i < n = do
       writeArray out (NFrames i) (double2CFloat amp)
