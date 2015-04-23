@@ -39,6 +39,7 @@ library
                        Sound.Integral,
                        Sound.LineSeg,
                        Sound.Lowpass,
+                       Sound.LowFrequencyOscillator,
                        Sound.Quantization,
                        Sound.Random,
                        Sound.Sinus,

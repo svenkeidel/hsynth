@@ -6,7 +6,7 @@ with pkgs.haskellPackages; cabal.mkDerivation (self: {
   src = ./.;
   buildDepends = [
     cabalInstall pkgs.pkgconfig ghcCore
-    cassava hspec criterion ghcid
+    cassava hspec criterion #ghcid
     random alsaCore binary pkgs.sox
     jack pkgs.jack2 pkgs.qjackctl pkgs.a2jmidid pkgs.jackmeter
   ];
