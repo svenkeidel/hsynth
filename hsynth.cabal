@@ -42,6 +42,7 @@ library
                        Sound.LowFrequencyOscillator,
                        Sound.Quantization,
                        Sound.Random,
+                       Sound.Sample,
                        Sound.Sinus,
                        Sound.Saw,
                        Sound.Time,

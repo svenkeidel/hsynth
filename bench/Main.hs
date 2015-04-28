@@ -18,19 +18,20 @@ import           Music.Tuning.EqualTemperament
 
 import           Sound.Types
 import           Sound.Flute
+import           Sound.Sample
 
 import qualified System.Random as R
 
 main :: IO ()
 main = do
   g <- R.newStdGen
-  let audio freq _ rate = flute 5 0.5 freq 0.9 0.02 g rate
-      sig p vel rate = audio (tuning p) vel rate
+  let audio freq rate = flute 5 0.5 freq 0.9 0.02 g rate
+      sig p rate = Sample (audio (tuning p) rate) []
       sampleRate = 48000
-      vm = VM.noteOn 64 100 sampleRate
-         $ VM.noteOn 65 100 sampleRate
-         $ VM.noteOn 66 100 sampleRate
-         $ VM.voiceMap sig
+      vm = VM.noteOn 64 (sig 64 sampleRate)
+         $ VM.noteOn 65 (sig 65 sampleRate)
+         $ VM.noteOn 66 (sig 66 sampleRate)
+         $ VM.empty
       benchSize = 1024
 
   defaultMain
@@ -51,7 +52,7 @@ main = do
 
     singleValue :: VoiceMap -> (Double,VoiceMap)
     singleValue vm =
-      let (d,vm') = VM.mapAccumNotes (\d (S.Cons a as) -> (d+a,as)) 0 vm
+      let (d,vm') = VM.mapAccumNotes (\amp (S.Cons x xs) -> (amp+x,xs)) (curry id) 0 vm
       in (d / fromIntegral (VM.size vm), vm')
 
     getVector n = V.unfoldrN n (Just . singleValue)
@@ -61,7 +62,7 @@ main = do
 
     batchVector :: Int -> VoiceMap -> (Vector Double,VoiceMap)
     batchVector n vm =
-      VM.mapAccumNotes (mixSampleVector n) (V.replicate n 0) vm
+      VM.mapAccumNotes (mixSampleVector n) (curry id) (V.replicate n 0) vm
 
     mixSampleVector :: Int -> Vector Double -> Audio -> (Vector Double, Audio)
     mixSampleVector n sample audio = 
@@ -72,7 +73,7 @@ main = do
 
     batchList :: Int -> VoiceMap -> ([Double],VoiceMap)
     batchList n vm =
-      VM.mapAccumNotes (mixSampleList n) (replicate n 0) vm
+      VM.mapAccumNotes (mixSampleList n) (curry id) (replicate n 0) vm
 
     mixSampleList :: Int -> [Double] -> Audio -> ([Double], Audio)
     mixSampleList n sample audio = 
@@ -83,7 +84,7 @@ main = do
 
     batchVectorStorable :: Int -> VoiceMap -> (VS.Vector Double,VoiceMap)
     batchVectorStorable n vm =
-      VM.mapAccumNotes (mixSampleStorable n) (VS.replicate n 0) vm
+      VM.mapAccumNotes (mixSampleStorable n) (curry id) (VS.replicate n 0) vm
 
     mixSampleStorable :: Int -> VS.Vector Double -> Audio -> (VS.Vector Double, Audio)
     mixSampleStorable n sample audio = 
@@ -94,7 +95,7 @@ main = do
 
     batchVectorPrimitive :: Int -> VoiceMap -> (VP.Vector Double,VoiceMap)
     batchVectorPrimitive n vm =
-      VM.mapAccumNotes (mixSampleVectorPrimitive n) (VP.replicate n 0) vm
+      VM.mapAccumNotes (mixSampleVectorPrimitive n) (curry id) (VP.replicate n 0) vm
 
     mixSampleVectorPrimitive :: Int -> VP.Vector Double -> Audio -> (VP.Vector Double, Audio)
     mixSampleVectorPrimitive n sample audio = 

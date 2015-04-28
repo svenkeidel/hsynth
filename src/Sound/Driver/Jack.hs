@@ -22,43 +22,45 @@ import           Sound.JACK.Audio (Port)
 import qualified Sound.JACK.Audio as Audio
 import qualified Sound.JACK as JACK
 import qualified Sound.JACK.MIDI as MIDI
-
-import qualified Data.Stream as S
+import           Sound.Sample
 import           Sound.Types
 
+import qualified Data.Stream as S
+
 import           Music.Midi
-import           Music.VoiceMap
+import           Music.VoiceMap (VoiceMap)
+import qualified Music.VoiceMap as VM
 
-type Synthesizer = MVar VoiceMap
+type Synthesizer = Pitch -> Velocity -> Rate -> Sample
 
-runAudio :: VoiceMap -> IO ()
-runAudio f = do
-  sig <- newMVar f
-  start "hsynth" sig
+runAudio :: Synthesizer -> IO ()
+runAudio synth = do
+  sig <- newMVar VM.empty
+  start "hsynth" synth sig
 
-start :: String -> Synthesizer -> IO ()
-start name synth = do
+start :: String -> Synthesizer -> MVar VoiceMap -> IO ()
+start name synth vm = do
   JACK.handleExceptions $
       JACK.withClientDefault name $ \client ->
       MIDI.withPort client "input" $ \input ->
       JACK.withPort client "output" $ \output -> do
         rate <- lift $ JACK.getSampleRate client
-        JACK.withProcess client (render synth input output rate) $
+        JACK.withProcess client (render synth vm input output rate) $
             JACK.withActivation client $ lift $ do
                 putStrLn $ "started " ++ name ++ "..."
                 JACK.waitForBreak
 
-render :: Synthesizer -> MIDI.Port Input -> Port Output -> Rate -> NFrames -> ExceptionalT Errno IO ()
-render synth input output rate nframes@(NFrames n) = do
+render :: Synthesizer -> MVar VoiceMap -> MIDI.Port Input -> Port Output -> Rate -> NFrames -> ExceptionalT Errno IO ()
+render synth mvm input output rate nframes@(NFrames n) = do
   rawMidiEvents <- MIDI.readRawEventsFromPort input nframes
   let midiMsgs = concat $ map (getMessages . B.fromStrict . MIDI.rawEventBuffer) rawMidiEvents
   lift $ do
     {-print midiMsgs-}
     out <- Audio.getBufferArray output nframes
-    modifyMVar_ synth $ \vm -> do
-      let vm' = foldr (interpret rate) vm midiMsgs
-      let (sample,vm'') = mapAccumNotes mixSample emptySample vm'
-      write out 0 (V.toList (if size vm'' == 0 then sample else V.map (/ fromIntegral (size vm'')) sample))
+    modifyMVar_ mvm $ \vm -> do
+      let vm' = foldr (VM.interpret (\pitch vel -> synth pitch vel rate)) vm midiMsgs
+      let (sample,vm'') = VM.mapAccumNotes mixSample mixSampleList emptySample vm'
+      write out 0 (V.toList (if VM.size vm'' == 0 then sample else V.map (/ fromIntegral (VM.size vm'')) sample))
       return vm''
   where
     emptySample = V.replicate (fromIntegral n) 0
@@ -66,6 +68,11 @@ render synth input output rate nframes@(NFrames n) = do
     mixSample :: Vector Double -> Audio -> (Vector Double, Audio)
     mixSample sample audio = 
       let (sample',audio') = S.splitAt (fromIntegral n) audio
+      in (V.zipWith (+) sample (V.fromList sample'),audio')
+
+    mixSampleList :: Vector Double -> [Double] -> (Vector Double, [Double])
+    mixSampleList sample audio =
+      let (sample',audio') = splitAt (fromIntegral n) audio
       in (V.zipWith (+) sample (V.fromList sample'),audio')
 
     write out i (amp:samp) | i < n = do

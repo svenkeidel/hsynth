@@ -1,6 +1,6 @@
 module Music.VoiceMap
 ( VoiceMap
-, voiceMap
+, empty
 , noteOn
 , noteOff
 , mapAccumNotes
@@ -8,58 +8,60 @@ module Music.VoiceMap
 , interpret
 ) where
 
+import           Control.Arrow (second)
+
+import           Data.Maybe (fromMaybe)
 import           Data.IntMap (IntMap)
 import qualified Data.IntMap as M
+
 import           Music.Midi (Pitch,Velocity,MidiMessage(..),ChannelVoiceMessage(..))
+
+import           Sound.Sample
 import           Sound.Types
 
 -- | Maintains audio signals of a specific MIDI pitch
 data VoiceMap = VoiceMap
-  { signal :: Pitch -> Velocity -> Rate -> Audio
-  , voices :: IntMap Audio
+  { voices   :: IntMap Sample
+  , tearDown :: IntMap [Double]
   }
 
-instance Show VoiceMap where
-  show vm = show $ M.keys (voices vm)
+empty :: VoiceMap
+empty = VoiceMap M.empty M.empty
+{-# INLINE empty #-}
 
-voiceMap :: (Pitch -> Velocity -> Rate -> Audio) -> VoiceMap
-voiceMap sig = VoiceMap sig M.empty
-{-# INLINE voiceMap #-}
-
-noteOn :: Pitch -> Velocity -> Rate -> VoiceMap -> VoiceMap
-noteOn pitch vel rate vm =
-  insertNote pitch (signal vm pitch vel rate) vm
+noteOn :: Pitch -> Sample -> VoiceMap -> VoiceMap
+noteOn pitch sample vm = vm
+  { voices = M.insert (fromIntegral pitch) sample (voices vm)
+  }
 {-# INLINE noteOn #-}
 
 noteOff :: Pitch -> VoiceMap -> VoiceMap
-noteOff = deleteNote
+noteOff pitch vm = vm
+  { voices = M.delete pitch' (voices vm)
+  , tearDown = fromMaybe (tearDown vm) $ do
+      Sample _ td <- M.lookup pitch' (voices vm)
+      return $ M.insert pitch' td (tearDown vm)
+  }
+  where
+    pitch' = fromIntegral pitch
 {-# INLINE noteOff #-}
 
 size :: VoiceMap -> Int
-size = M.size . voices
+size vm = M.size (tearDown vm) + M.size (voices vm)
 {-# INLINE size #-}
 
-interpret :: Rate -> MidiMessage -> VoiceMap -> VoiceMap
-interpret rate (Voice _ (NoteOn pitch vel)) vm =
-  noteOn pitch vel rate vm
+interpret :: (Velocity -> Pitch -> Sample) -> MidiMessage -> VoiceMap -> VoiceMap
+interpret synth (Voice _ (NoteOn pitch vel)) vm =
+  noteOn pitch (synth pitch vel) vm
 interpret _ (Voice _ (NoteOff pitch _)) vm =
   noteOff pitch vm
 -- ingore all other messages
 interpret _ _ vm = vm
 {-# INLINE interpret #-}
 
-mapAccumNotes :: (a -> Audio -> (a,Audio)) -> a -> VoiceMap -> (a, VoiceMap)
-mapAccumNotes f a vm =
-  let (a',voices') = M.mapAccum f a (voices vm)
-  in (a',vm { voices = voices' })
+mapAccumNotes :: (a -> Audio -> (a,Audio)) -> (a -> [Double] -> (a,[Double])) -> a -> VoiceMap -> (a, VoiceMap)
+mapAccumNotes f g a0 vm =
+  let (a1,voices')   = M.mapAccum (\a (Sample audio rest) -> let (a',audio') = f a audio in (a',Sample audio' rest)) a0 (voices vm)
+      (a2,tearDown') = second (M.filter (not . null)) $ M.mapAccum g a1 (tearDown vm)
+  in (a2,vm { voices = voices', tearDown = tearDown' })
 {-# INLINE mapAccumNotes #-}
-
-insertNote :: Pitch -> Audio -> VoiceMap -> VoiceMap
-insertNote pitch audio vm =
-  vm { voices = M.insert (fromIntegral pitch) audio (voices vm) }
-{-# INLINE insertNote #-}
-
-deleteNote :: Pitch -> VoiceMap -> VoiceMap
-deleteNote pitch vm =
-  vm { voices = M.delete (fromIntegral pitch) (voices vm) }
-{-# INLINE deleteNote #-}
