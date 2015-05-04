@@ -55,7 +55,7 @@ render synth mvm input output rate nframes@(NFrames n) = do
   rawMidiEvents <- MIDI.readRawEventsFromPort input nframes
   let midiMsgs = concat $ map (getMessages . B.fromStrict . MIDI.rawEventBuffer) rawMidiEvents
   lift $ do
-    {-print midiMsgs-}
+    printMidiMsg $ filterMidiMsg midiMsgs
     out <- Audio.getBufferArray output nframes
     modifyMVar_ mvm $ \vm -> do
       let vm' = foldr (VM.interpret (\pitch vel -> synth pitch vel rate)) vm midiMsgs
@@ -64,6 +64,13 @@ render synth mvm input output rate nframes@(NFrames n) = do
       return vm''
   where
     emptySample = V.replicate (fromIntegral n) 0
+
+    filterMidiMsg :: [MidiMessage] -> [MidiMessage]
+    filterMidiMsg = filter (\msg -> case msg of SystemRealTime _ -> False; _ -> True)
+
+    printMidiMsg :: [MidiMessage] -> IO ()
+    printMidiMsg [] = return ()
+    printMidiMsg l = print l
 
     mixSample :: Vector Double -> Audio -> (Vector Double, Audio)
     mixSample sample audio = 
