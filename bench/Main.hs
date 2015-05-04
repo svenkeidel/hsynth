@@ -26,7 +26,7 @@ main :: IO ()
 main = do
   g <- R.newStdGen
   let audio freq rate = flute 5 0.5 freq 0.9 0.02 g rate
-      sig p rate = Sample (audio (tuning p) rate) []
+      sig p rate = Sample (audio (tuning p) rate) (const [])
       sampleRate = 48000
       vm = VM.noteOn 64 (sig 64 sampleRate)
          $ VM.noteOn 65 (sig 65 sampleRate)

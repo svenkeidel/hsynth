@@ -35,6 +35,7 @@ library
                        Sound.BaseDrum,
                        Sound.BiQuadraticFilter,
                        Sound.Delay,
+                       Sound.FadeOut,
                        Sound.Flute,
                        Sound.Integral,
                        Sound.LineSeg,

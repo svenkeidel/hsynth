@@ -39,8 +39,8 @@ noteOff :: Pitch -> VoiceMap -> VoiceMap
 noteOff pitch vm = vm
   { voices = M.delete pitch' (voices vm)
   , tearDown = fromMaybe (tearDown vm) $ do
-      Sample _ td <- M.lookup pitch' (voices vm)
-      return $ M.insert pitch' td (tearDown vm)
+      Sample audio td <- M.lookup pitch' (voices vm)
+      return $ M.insert pitch' (td audio) (tearDown vm)
   }
   where
     pitch' = fromIntegral pitch
