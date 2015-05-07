@@ -60,7 +60,7 @@ render synth mvm input output rate nframes@(NFrames n) = do
     modifyMVar_ mvm $ \vm -> do
       let vm' = foldr (VM.interpret (\pitch vel -> synth pitch vel rate)) vm midiMsgs
       let (sample,vm'') = VM.mapAccumNotes mixSample mixSampleList emptySample vm'
-      write out 0 (V.toList (if VM.size vm'' == 0 then sample else V.map (/ fromIntegral (VM.size vm'')) sample))
+      write out 0 (V.toList sample)
       return vm''
   where
     emptySample = V.replicate (fromIntegral n) 0
