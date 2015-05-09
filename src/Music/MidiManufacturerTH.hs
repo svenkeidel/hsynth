@@ -1,7 +1,5 @@
 module Music.MidiManufacturerTH where
 
-import           Control.Applicative
-
 import           Data.Char (ord,isAlphaNum,isSpace,toUpper)
 import           Data.Csv
 import           Data.Word

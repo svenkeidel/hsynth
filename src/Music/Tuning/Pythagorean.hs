@@ -3,9 +3,6 @@ module Music.Tuning.Pythagorean where
 
 import           Control.Arrow ((>>>))
 
-import           Data.Monoid
-import           Data.Foldable (Foldable)
-import qualified Data.Foldable as F
 import           Music.Interval
 import           Music.JustInterval
 import           Music.Pitch
@@ -63,7 +60,7 @@ rightAlign :: Table a -> Table a
 rightAlign (Table _ tab) = (Table RightAlign tab)
 
 instance Foldable Table where
-  foldMap f (Table _ tab) = mconcat $ map (F.foldMap f) tab
+  foldMap f (Table _ tab) = mconcat $ map (foldMap f) tab
   foldr f z (Table _ tab) = go z tab
     where
       go b0 [] = b0
@@ -74,7 +71,7 @@ instance Show a => Show (Table a) where
   show tab@(Table aln _) = unlines (map unwords (tabData (fmap align showed)))
     where
       showed  = fmap (\s -> let sw = show s in (length sw, sw)) tab
-      m = fst $ F.maximum showed
+      m = fst $ maximum showed
       align (l,s) = case aln of
         LeftAlign  -> s ++ replicate (m - l) ' '
         RightAlign -> replicate (m - l) ' ' ++ s

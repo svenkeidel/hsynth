@@ -1,7 +1,5 @@
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE BinaryLiterals #-}
 module Music.Midi where
-
-import           Control.Applicative
 
 import           Data.Word
 import           Data.Binary.Get (Get,Decoder)
@@ -12,9 +10,7 @@ import           Data.ByteString.Lazy.Internal (chunk,ByteString(..))
 import qualified Data.ByteString as BS
 import           Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as BSB
-import           Data.Monoid (mempty,(<>))
-
-import           Language.Literals.Binary (b)
+import           Data.Monoid ((<>))
 
 import           Music.MidiManufacturer
 
@@ -114,15 +110,15 @@ getMessage = do
   (firstHalfWord,lastHalfWord) <- splitHalf
   let chan = lastHalfWord
   case firstHalfWord of
-    [b| 1000 |] -> Voice chan <$> (NoteOff <$> B.getWord8 <*> B.getWord8)
-    [b| 1001 |] -> Voice chan <$> (NoteOn <$> B.getWord8 <*> B.getWord8)
-    [b| 1010 |] -> Voice chan <$> (PolyphonicKeyPressure <$> B.getWord8 <*> B.getWord8)
-    [b| 1011 |] -> getController chan
-    [b| 1100 |] -> Voice chan <$> (ProgramChange <$> B.getWord8)
-    [b| 1101 |] -> Voice chan <$> (ChannelPressure <$> B.getWord8)
-    [b| 1110 |] -> Voice chan <$> (PitchBend <$> getInt)
-    [b| 1111 |] -> getSystemMessage lastHalfWord
-    _           -> parseError $ "unknown midi message: (" ++ show firstHalfWord ++ "," ++ show lastHalfWord ++ ")"
+    0b1000 -> Voice chan <$> (NoteOff <$> B.getWord8 <*> B.getWord8)
+    0b1001 -> Voice chan <$> (NoteOn <$> B.getWord8 <*> B.getWord8)
+    0b1010 -> Voice chan <$> (PolyphonicKeyPressure <$> B.getWord8 <*> B.getWord8)
+    0b1011 -> getController chan
+    0b1100 -> Voice chan <$> (ProgramChange <$> B.getWord8)
+    0b1101 -> Voice chan <$> (ChannelPressure <$> B.getWord8)
+    0b1110 -> Voice chan <$> (PitchBend <$> getInt)
+    0b1111 -> getSystemMessage lastHalfWord
+    _      -> parseError $ "unknown midi message: (" ++ show firstHalfWord ++ "," ++ show lastHalfWord ++ ")"
 
 getController :: Channel -> Get MidiMessage
 getController chan = do
@@ -144,43 +140,43 @@ getController chan = do
 getSystemMessage :: Word8 -> Get MidiMessage
 getSystemMessage lastHalfWord =
   case lastHalfWord of
-    [b| 0000 |] -> getSystemExclusiveMessage
-    [b| 0001 |] -> getTimeCodeMessage
-    [b| 0010 |] -> SystemCommon <$> (SongPosition <$> getInt)
-    [b| 0011 |] -> SystemCommon <$> (SongSelect <$> B.getWord8)
-    [b| 0100 |] -> return $ Reserved
-    [b| 0101 |] -> return $ Reserved
-    [b| 1000 |] -> return $ SystemRealTime TimeClock
-    [b| 1001 |] -> return $ Reserved
-    [b| 1010 |] -> return $ SystemRealTime Start
-    [b| 1011 |] -> return $ SystemRealTime Continue
-    [b| 1100 |] -> return $ SystemRealTime Stop
-    [b| 1101 |] -> return $ Reserved
-    [b| 1110 |] -> return $ SystemRealTime ActiveSensing
-    [b| 1111 |] -> return $ SystemRealTime Reset
-    _           -> parseError $ "unknown midi system message: (" ++ show ([b| 11111 |] :: Word8) ++ "," ++ show lastHalfWord ++ ")"
+    0b0000 -> getSystemExclusiveMessage
+    0b0001 -> getTimeCodeMessage
+    0b0010 -> SystemCommon <$> (SongPosition <$> getInt)
+    0b0011 -> SystemCommon <$> (SongSelect <$> B.getWord8)
+    0b0100 -> return $ Reserved
+    0b0101 -> return $ Reserved
+    0b1000 -> return $ SystemRealTime TimeClock
+    0b1001 -> return $ Reserved
+    0b1010 -> return $ SystemRealTime Start
+    0b1011 -> return $ SystemRealTime Continue
+    0b1100 -> return $ SystemRealTime Stop
+    0b1101 -> return $ Reserved
+    0b1110 -> return $ SystemRealTime ActiveSensing
+    0b1111 -> return $ SystemRealTime Reset
+    _      -> parseError $ "unknown midi system message: (" ++ show (0b11111 :: Word8) ++ "," ++ show lastHalfWord ++ ")"
 {-# INLINE getSystemMessage #-}
 
 getTimeCodeMessage :: Get MidiMessage
 getTimeCodeMessage = do
   word <- B.getWord8
-  let messageType = shiftR (word .&. [b| 01110000 |]) 4
-      nibble = word .&. [b| 00001111 |]
+  let messageType = shiftR (word .&. 0b01110000) 4
+      nibble = word .&. 0b00001111
       timeCode = case messageType of
-        [b| 0000 |] -> Right FrameLow
-        [b| 0001 |] -> Right FrameHigh
-        [b| 0010 |] -> Right SecondLow
-        [b| 0011 |] -> Right SecondHigh
-        [b| 0100 |] -> Right MinuteLow
-        [b| 0101 |] -> Right MinuteHigh
-        [b| 0110 |] -> Right HourLow
-        [b| 0111 |] -> Right HourHigh
-        _           -> Left $ "unknown time code: " ++ show messageType
+        0b0000 -> Right FrameLow
+        0b0001 -> Right FrameHigh
+        0b0010 -> Right SecondLow
+        0b0011 -> Right SecondHigh
+        0b0100 -> Right MinuteLow
+        0b0101 -> Right MinuteHigh
+        0b0110 -> Right HourLow
+        0b0111 -> Right HourHigh
+        _      -> Left $ "unknown time code: " ++ show messageType
   return $ either ParseError (\tc -> SystemCommon $ TimeCodeQuarterFrame tc nibble) timeCode
 {-# INLINE getTimeCodeMessage #-}
 
 getSystemExclusiveMessage :: Get MidiMessage
-getSystemExclusiveMessage = SystemExclusive <$> getManufacturer <*> takeUntil [b| 11110111 |]
+getSystemExclusiveMessage = SystemExclusive <$> getManufacturer <*> takeUntil 0b11110111
 {-# INLINE getSystemExclusiveMessage #-}
 
 getManufacturer :: Get Manufacturer
@@ -218,7 +214,7 @@ parseError = return . ParseError
 splitHalf :: Get (Word8,Word8)
 splitHalf = do
   word <- B.getWord8
-  return (shiftR word 4, word .&. [b| 00001111 |])
+  return (shiftR word 4, word .&. 0b00001111)
 {-# INLINE splitHalf #-}
 
 

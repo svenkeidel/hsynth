@@ -2,7 +2,6 @@ module Sound.Driver.StdOut where
 
 import           Prelude hiding (concat)
 
-import           Data.Monoid (mappend)
 import           Data.Stream (Stream(..))
 import           Data.ByteString.Lazy.Builder
 

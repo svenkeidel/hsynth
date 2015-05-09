@@ -2,7 +2,6 @@
 {-# LANGUAGE StandaloneDeriving #-}
 module Music.MidiManufacturer where
 
-import           Control.Applicative
 import           Data.Word (Word8)
 import           Data.Binary (Get)
 import qualified Data.Binary as B
