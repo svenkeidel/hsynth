@@ -16,6 +16,14 @@ flag sox
   description: Enable sox support
   default:     False
 
+flag pulseaudio
+  description: Enable pulseaudio support
+  default:     False
+
+flag alsa
+  description: Enable alsa support
+  default:     False
+
 library
   exposed-modules:     Data.Stream,
                        Music.Composition,
@@ -73,12 +81,23 @@ library
     build-depends:     sox
     exposed-modules:   Sound.Driver.Sox
 
+  if flag(pulseaudio)
+    build-depends:     pulse-simple
+    exposed-modules:   Sound.Driver.Pulse
+
+  if flag(alsa)
+    pkgconfig-depends: alsa
+    exposed-modules:   Sound.Driver.Alsa
+    c-sources:         cbits/alsa.c
+
 executable main
   main-is:             Main.hs
-  ghc-options:         -O2
+  ghc-options:         -O2 -threaded
   build-depends:       base,
                        hsynth,
-                       random
+                       random,
+                       stm,
+                       vector
   hs-source-dirs:      main
   default-language:    Haskell2010
 

@@ -43,45 +43,50 @@ start :: String -> Synthesizer -> MVar VoiceMap -> IO ()
 start name synth vm = do
   JACK.handleExceptions $
       JACK.withClientDefault name $ \client ->
-      MIDI.withPort client "input" $ \input ->
+      {-MIDI.withPort client "input" $ \input ->-}
       JACK.withPort client "output" $ \output -> do
         rate <- lift $ JACK.getSampleRate client
-        JACK.withProcess client (render synth vm input output rate) $
+        JACK.withProcess client (render synth vm {-input-} output rate) $
             JACK.withActivation client $ lift $ do
                 putStrLn $ "started " ++ name ++ "..."
                 JACK.waitForBreak
 
-render :: Synthesizer -> MVar VoiceMap -> MIDI.Port Input -> Port Output -> Rate -> NFrames -> ExceptionalT Errno IO ()
-render synth mvm input output rate nframes@(NFrames n) = do
-  rawMidiEvents <- MIDI.readRawEventsFromPort input nframes
-  let midiMsgs = concat $ map (getMessages . B.fromStrict . MIDI.rawEventBuffer) rawMidiEvents
+render :: Synthesizer -> MVar VoiceMap -> {-MIDI.Port Input ->-} Port Output -> Rate -> NFrames -> ExceptionalT Errno IO ()
+render synth mvm {-input-} output rate nframes@(NFrames n) = do
+  {-rawMidiEvents <- MIDI.readRawEventsFromPort input nframes-}
+  {-let midiMsgs = concat $ map (getMessages . B.fromStrict . MIDI.rawEventBuffer) rawMidiEvents-}
   lift $ do
-    printMidiMsg $ filterMidiMsg midiMsgs
+    {-printMidiMsg $ filterMidiMsg midiMsgs-}
+    print "called"
+    {-putStrLn (unwords [ "rate", show rate-}
+                      {-, "frames", show n-}
+                      {-])-}
     out <- Audio.getBufferArray output nframes
-    modifyMVar_ mvm $ \vm -> do
-      let vm' = foldr (VM.interpret (\pitch vel -> synth pitch vel rate)) vm midiMsgs
-      let (sample,vm'') = VM.mapAccumNotes mixSample mixSampleList emptySample vm'
-      write out 0 (V.toList sample)
-      return vm''
+    {-modifyMVar_ mvm $ \vm -> do-}
+      {-let vm' = foldr (VM.interpret (\pitch vel -> synth pitch vel rate)) vm midiMsgs-}
+      {-let (sample,vm'') = VM.mapAccumNotes mixSample mixSampleList emptySample vm'-}
+      {-write out 0 (V.toList sample)-}
+      {-return vm''-}
+    write out 0 (repeat 0 :: [Double])
   where
-    emptySample = V.replicate (fromIntegral n) 0
+    {-emptySample = V.replicate (fromIntegral n) 0-}
 
-    filterMidiMsg :: [MidiMessage] -> [MidiMessage]
-    filterMidiMsg = filter (\msg -> case msg of SystemRealTime _ -> False; _ -> True)
+    {-filterMidiMsg :: [MidiMessage] -> [MidiMessage]-}
+    {-filterMidiMsg = filter (\msg -> case msg of SystemRealTime _ -> False; _ -> True)-}
 
-    printMidiMsg :: [MidiMessage] -> IO ()
-    printMidiMsg [] = return ()
-    printMidiMsg l = print l
+    {-printMidiMsg :: [MidiMessage] -> IO ()-}
+    {-printMidiMsg [] = return ()-}
+    {-printMidiMsg l = print l-}
 
-    mixSample :: Vector Double -> Audio -> (Vector Double, Audio)
-    mixSample sample audio = 
-      let (sample',audio') = S.splitAt (fromIntegral n) audio
-      in (V.zipWith (+) sample (V.fromList sample'),audio')
+    {-mixSample :: Vector Double -> Audio -> (Vector Double, Audio)-}
+    {-mixSample sample audio = -}
+      {-let (sample',audio') = S.splitAt (fromIntegral n) audio-}
+      {-in (V.zipWith (+) sample (V.fromList sample'),audio')-}
 
-    mixSampleList :: Vector Double -> [Double] -> (Vector Double, [Double])
-    mixSampleList sample audio =
-      let (sample',audio') = splitAt (fromIntegral n) audio
-      in (V.zipWith (+) sample (V.fromList sample'),audio')
+    {-mixSampleList :: Vector Double -> [Double] -> (Vector Double, [Double])-}
+    {-mixSampleList sample audio =-}
+      {-let (sample',audio') = splitAt (fromIntegral n) audio-}
+      {-in (V.zipWith (+) sample (V.fromList sample'),audio')-}
 
     write out i (amp:samp) | i < n = do
       writeArray out (NFrames i) (double2CFloat amp)

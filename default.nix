@@ -1,16 +1,18 @@
 { pkgs ? import <nixpkgs> {} }:
 
-let pkg = pkgs.haskellPackages.callPackage (
-  { mkDerivation, base, ghc, Cabal, cabal-install, ghc-core, cassava, hspec,
-    criterion, random, alsa-core, binary, jack, explicit-exception }:
-    mkDerivation {
-      pname = "hsynth";
-      version = "0.1.0.0";
-      src = ./.;
-      buildDepends = [
-        pkgs.pkgconfig Cabal base cabal-install ghc-core cassava hspec criterion
-        random alsa-core binary explicit-exception jack pkgs.sox
-      ];
-      license = pkgs.stdenv.lib.licenses.gpl3;
-    }) {};
-in pkg.env
+let env = pkgs.haskellPackages.ghcWithPackages(p: with p; [
+    Cabal cabal-install ghc-core cassava hspec criterion
+    random alsa-core binary explicit-exception pulse-simple
+  ]);
+in pkgs.stdenv.mkDerivation {
+  name = "hsynth";
+  version = "0.1.0.0";
+  src = ./.;
+  buildInputs = [ pkgs.pkgconfig pkgs.alsaLib env ];
+  shellHook = ''
+    export NIX_GHC="${env}/bin/ghc"
+    export NIX_GHCPKG="${env}/bin/ghc-pkg"
+    export NIX_GHC_DOCDIR="${env}/share/doc/ghc/html"
+    export NIX_GHC_LIBDIR=$( $NIX_GHC --print-libdir )
+  '';
+}

@@ -9,5 +9,5 @@ import           Sound.Types
 fadeOut :: Duration -> Rate -> Audio -> [Double]
 fadeOut dur rate audio = 
   S.take (truncate (dur * fromIntegral rate))
-    {-$ audio * lfo 100 (lineSeg [(1,dur)] 0) rate-}
-    $ audio * lineSeg [(1,dur)] 0 rate
+    $ audio * lfo 10 (lineSeg [(1,dur)] 0) rate
+    {-$ audio * lineSeg [(1,dur)] 0 rate-}
