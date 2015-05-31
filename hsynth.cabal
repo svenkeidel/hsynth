@@ -24,6 +24,10 @@ flag alsa
   description: Enable alsa support
   default:     False
 
+flag sdl
+  description: Enable sdl support
+  default:     False
+
 library
   exposed-modules:     Data.Stream,
                        Music.Composition,
@@ -89,6 +93,10 @@ library
     pkgconfig-depends: alsa
     exposed-modules:   Sound.Driver.Alsa
     c-sources:         cbits/alsa.c
+
+  if flag(sdl)
+    build-depends:     sdl2
+    exposed-modules:   Sound.Driver.SDL
 
 executable main
   main-is:             Main.hs

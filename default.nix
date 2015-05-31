@@ -1,8 +1,17 @@
 { pkgs ? import <nixpkgs> {} }:
 
-let env = pkgs.haskellPackages.ghcWithPackages(p: with p; [
+let lib = pkgs.haskell-ng.lib;
+  haskellPackages' = pkgs.haskellPackages.override {
+     overrides = self: super: {
+       vector = super.vector.override {
+         mkDerivation = (attrs: self.mkDerivation (attrs // { doCheck = false; }));
+       };
+     };
+   };
+  env = haskellPackages'.ghcWithPackages(p: with p; [
     Cabal cabal-install ghc-core cassava hspec criterion
     random alsa-core binary explicit-exception pulse-simple
+    sdl2
   ]);
 in pkgs.stdenv.mkDerivation {
   name = "hsynth";
