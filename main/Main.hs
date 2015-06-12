@@ -4,8 +4,7 @@ import           Control.Applicative
 
 import qualified Data.Stream as S
 
-import qualified Sound.Driver.Pulse as Driver
-import qualified Sound.Driver.Alsa as Alsa
+import qualified Sound.Driver.SDL as Driver
 import           Sound.BaseDrum
 import           Sound.FadeOut
 import           Sound.Flute
@@ -27,22 +26,27 @@ import           Control.Concurrent (forkIO)
 import           Control.Concurrent.MVar
 
 main = do
-  args <- getArgs
-  vm <- newMVar VM.empty
-  let rate = 44100
-  let audio freq vel rate = Sample (0.20 * sinA freq rate) (fadeOut 0.1 rate)
-  let sig pitch vel rate = audio (tuning pitch) vel rate
 
-  forkIO $ Alsa.withRawMidi (head args) $ \midi -> 
-    Alsa.withMessages 1 midi $ \msg ->
-      modifyMVar_ vm $ \voiceMap ->
-        return $ VM.interpret (\pitch vel -> sig pitch vel rate) msg voiceMap
+  Driver.withSDL
 
-  Driver.withPulse rate $ \pulse ->
-    forever $ modifyMVar_ vm $ \voiceMap -> do
-      let (sample,vm') = VM.mapAccumNotes mixSample mixSampleList emptySample voiceMap
-      Driver.writeChunk pulse sample
-      return vm'
+  {-args <- getArgs-}
+  {-vm <- newMVar VM.empty-}
+  {-let rate = 44100-}
+  {-let audio freq vel rate = Sample (0.20 * sinA freq rate) (fadeOut 0.1 rate)-}
+  {-let sig pitch vel rate = audio (tuning pitch) vel rate-}
+
+
+
+  {-forkIO $ Alsa.withRawMidi (head args) $ \midi -> -}
+    {-Alsa.withMessages 1 midi $ \msg ->-}
+      {-modifyMVar_ vm $ \voiceMap ->-}
+        {-return $ VM.interpret (\pitch vel -> sig pitch vel rate) msg voiceMap-}
+
+  {-Driver.withPulse rate $ \pulse ->-}
+    {-forever $ modifyMVar_ vm $ \voiceMap -> do-}
+      {-let (sample,vm') = VM.mapAccumNotes mixSample mixSampleList emptySample voiceMap-}
+      {-Driver.writeChunk pulse sample-}
+      {-return vm'-}
 
   {-audio freq vel rate = fromIntegral vel / fromIntegral (maxBound :: Velocity) * sinA freq rate-}
   {-audio freq vel rate = 0.5 * sinA freq rate-}

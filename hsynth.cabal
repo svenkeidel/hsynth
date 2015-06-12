@@ -95,7 +95,8 @@ library
     c-sources:         cbits/alsa.c
 
   if flag(sdl)
-    build-depends:     sdl2
+    build-depends:     sdl2,
+                       linear
     exposed-modules:   Sound.Driver.SDL
 
 executable main
