@@ -2,7 +2,7 @@ module Sound.BaseDrum where
 
 import           Sound.Types
 import           Sound.LineSeg
-import           Sound.Sinus
+import           Sound.Sine
 
 kickDrum :: Frequency -> Rate -> Audio
 kickDrum freq rate =

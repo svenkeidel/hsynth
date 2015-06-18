@@ -97,7 +97,6 @@ getMessages = go decoder
       | BL.null input = []
       | otherwise     = go (k . takeHeadChunk $ input) (dropHeadChunk input)
     go (B.Fail _ _ errMsg) _ = error errMsg
- 
 {-
 instance Show a => Show (Decoder a) where
   show (B.Done leftover consumed a) = unwords ["Done", show leftover, show consumed, show a]

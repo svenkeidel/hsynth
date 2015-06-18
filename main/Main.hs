@@ -4,13 +4,15 @@ import           Control.Applicative
 
 import qualified Data.Stream as S
 
-import qualified Sound.Driver.SDL as Driver
+import qualified Sound.Driver.Jack as Driver
 import           Sound.BaseDrum
 import           Sound.FadeOut
 import           Sound.Flute
 import           Sound.Sample
-import           Sound.Sinus
+import           Sound.Sine
 import           Sound.Types
+import           Sound.Quantization
+
 import           Music.Pitch
 import           Music.Tuning.EqualTemperament
 import           Music.ConcertPitch (a440)
@@ -26,27 +28,18 @@ import           Control.Concurrent (forkIO)
 import           Control.Concurrent.MVar
 
 main = do
-
-  Driver.withSDL
+  {-str <- newMVar (quantizeSigned16 <$> 0.5 * sinA 440 48000)-}
+  {-Driver.withSDL (\_ _ -> return ()) $ \buf len ->-}
+    {-modifyMVar_ str (Driver.store buf len)-}
 
   {-args <- getArgs-}
   {-vm <- newMVar VM.empty-}
-  {-let rate = 44100-}
+
   {-let audio freq vel rate = Sample (0.20 * sinA freq rate) (fadeOut 0.1 rate)-}
   {-let sig pitch vel rate = audio (tuning pitch) vel rate-}
+  {-Driver.runAudio sig-}
 
-
-
-  {-forkIO $ Alsa.withRawMidi (head args) $ \midi -> -}
-    {-Alsa.withMessages 1 midi $ \msg ->-}
-      {-modifyMVar_ vm $ \voiceMap ->-}
-        {-return $ VM.interpret (\pitch vel -> sig pitch vel rate) msg voiceMap-}
-
-  {-Driver.withPulse rate $ \pulse ->-}
-    {-forever $ modifyMVar_ vm $ \voiceMap -> do-}
-      {-let (sample,vm') = VM.mapAccumNotes mixSample mixSampleList emptySample voiceMap-}
-      {-Driver.writeChunk pulse sample-}
-      {-return vm'-}
+  Driver.test
 
   {-audio freq vel rate = fromIntegral vel / fromIntegral (maxBound :: Velocity) * sinA freq rate-}
   {-audio freq vel rate = 0.5 * sinA freq rate-}
@@ -60,20 +53,3 @@ main = do
   {-Driver.runAudio16 (flute 5 0.5 440 0.9 0.02 g rate)-}
   where
     tuning = equalTemperament twelveTET a440 . fromMidiPitch
-
-    chunkSize = 100
-
-    emptySample = replicate chunkSize 0
-
-    mixSample :: [Double] -> Audio -> ([Double], Audio)
-    mixSample sample audio = 
-      let (sample',audio') = S.splitAt chunkSize audio
-      in (zipWith (+) sample sample',audio')
-
-    mixSampleList :: [Double] -> [Double] -> ([Double], [Double])
-    mixSampleList sample audio =
-      let (sample',audio') = splitAt chunkSize audio
-      in (zipWith (+) sample (padding sample'),audio')
-
-    padding :: [Double] -> [Double]
-    padding l = l ++ replicate (chunkSize - length l) 0

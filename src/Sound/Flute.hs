@@ -5,7 +5,7 @@ import qualified Data.Stream as S
 import           Sound.Types
 import           Sound.LineSeg
 import           Sound.Random
-import           Sound.Sinus
+import           Sound.Sine
 import           Sound.Delay
 import           Sound.Lowpass
 import           Sound.LowFrequencyOscillator

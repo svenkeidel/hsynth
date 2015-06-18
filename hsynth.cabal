@@ -55,7 +55,7 @@ library
                        Sound.Quantization,
                        Sound.Random,
                        Sound.Sample,
-                       Sound.Sinus,
+                       Sound.Sine,
                        Sound.Saw,
                        Sound.Time,
                        Sound.Triangle,
@@ -69,16 +69,14 @@ library
                        containers,
                        random,
                        vector,
+                       unix,
                        template-haskell
   ghc-options:         -Wall -O2
   hs-source-dirs:      src
   default-language:    Haskell2010
 
   if flag(jack)
-    build-depends:     array,
-                       explicit-exception,
-                       mtl,
-                       jack
+    pkgconfig-depends: jack
     exposed-modules:   Sound.Driver.Jack
 
   if flag(sox)
@@ -101,11 +99,10 @@ library
 
 executable main
   main-is:             Main.hs
-  ghc-options:         -O2 -threaded
+  ghc-options:         -O2 -threaded -rtsopts
   build-depends:       base,
                        hsynth,
                        random,
-                       stm,
                        vector
   hs-source-dirs:      main
   default-language:    Haskell2010

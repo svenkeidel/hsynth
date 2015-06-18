@@ -1,4 +1,4 @@
-module Sound.Sinus where
+module Sound.Sine where
 
 import           Control.Category
 

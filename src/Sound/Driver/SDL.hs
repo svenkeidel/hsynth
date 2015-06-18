@@ -5,64 +5,36 @@ module Sound.Driver.SDL where
 import           Linear
 import           SDL (KeyState,Keysym)
 import qualified SDL as SDL
-{-import           Data.Bits-}
-import           Data.Word
 
-{-import           Data.Bits ((.|.))-}
-{-import           Data.Int-}
-{-import           Data.Stream (Stream)-}
-{-import qualified Data.Stream as S-}
-{-import           Foreign.C.String-}
-{-import           Foreign.Marshal.Alloc-}
-{-import           Foreign.Storable-}
+import           Data.Word
+import           Data.Int
+import           Data.Stream 
+import qualified Data.Stream as S
+
 import           Foreign.C.Types
 import           Foreign.Ptr
 import           Foreign.Marshal.Array
-{-import           Data.Char (chr,ord)-}
-{-import           Data.Word-}
-{-import           Data.ByteString.Builder (Builder)-}
-{-import qualified Data.ByteString.Builder as B-}
-{-import           Data.ByteString.Builder.Extra (Next)-}
-{-import qualified Data.ByteString.Builder.Extra as B-}
+import           Foreign.Storable
 
-{-import           Sound.Quantization-}
-{-import           Sound.Types-}
-{-import           Music.Midi-}
+import           Unsafe.Coerce
 
-{-take :: Int -> Audio -> (Builder,Audio)-}
-{-take n s =-}
-  {-let (front,rest) = S.splitAt n s-}
-  {-in (foldMap (B.int32LE . quantizeSigned32) front,rest)-}
+store :: Ptr Word8 -> CInt -> Stream Int16 -> IO (Stream Int16)
+store buf len = go 0
+  where
+    go :: Int -> Stream Int16 -> IO (Stream Int16)
+    go i s@(Cons x xs)
+      | i >= fromIntegral len = return s
+      | otherwise = do
+        pokeElemOff alignedBuf i x
+        go (i+1) xs
 
-{-copyToBuffer :: Builder -> Ptr Word8 -> Int -> IO ()-}
-{-copyToBuffer builder buf0 len0 = do-}
-  {-cont <- B.runBuilder builder buf0 len0-}
-  {-go cont buf0 len0-}
-  {-where-}
-    {-go :: (Int,Next) -> Ptr Word8 -> Int -> IO ()-}
-    {-go (bytesWritten,next) buf len =-}
-      {-case next of-}
-        {-B.Done      -> return ()-}
-        {-B.More _ k  -> do-}
-          {-let buf' = advancePtr buf bytesWritten-}
-              {-len' = len - bytesWritten-}
-          {-cont <- k buf' len'-}
-          {-go cont buf' len'-}
-        {-B.Chunk _ k -> do-}
-          {-let buf' = advancePtr buf bytesWritten-}
-              {-len' = len - bytesWritten-}
-          {-cont <- k buf' len'-}
-          {-go cont buf' len'-}
-
-
+    alignedBuf = unsafeCoerce buf
 
 withSDL :: (KeyState -> Keysym -> IO ()) -> (Ptr Word8 -> CInt -> IO ())-> IO ()
 withSDL keyHandler audioCB = do
-  input <- mallocArray 1024 :: IO (Ptr Word32)
-  output <- mallocArray 1024 :: IO (Ptr Word8)
 
   SDL.initialize [SDL.InitAudio, SDL.InitVideo, SDL.InitEvents]
-  (device,_) <- SDL.openAudioDevice $ SDL.OpenDeviceSpec
+  (device,spec) <- SDL.openAudioDevice $ SDL.OpenDeviceSpec
     { SDL.openDeviceFreq = SDL.Mandate 48000
     , SDL.openDeviceFormat = SDL.Mandate (SDL.AudioFormat SDL.SignedInteger 16 SDL.Native)
     , SDL.openDeviceChannels = SDL.Mandate SDL.Mono
@@ -72,32 +44,39 @@ withSDL keyHandler audioCB = do
     , SDL.openDeviceName = Nothing
     }
 
-  window <- SDL.createWindow "hsynth" $ SDL.defaultWindow
-    { SDL.windowResizable = True
-    }
+  print $ SDL.audioSpecFormat spec
+  SDL.setAudioDevicePlaybackState device SDL.Play
 
+  window <- SDL.createWindow "hsynth" $ SDL.defaultWindow
+
+  SDL.showWindow window
   screenSurface <- SDL.getWindowSurface window
   screenSurfaceFormat <- SDL.surfaceFormat screenSurface
   black <- SDL.mapRGB screenSurfaceFormat (V3 minBound minBound minBound)
   SDL.fillRect screenSurface Nothing black
   SDL.updateWindowSurface window
-  SDL.showWindow window
 
   let loop = do
         event <- SDL.pollEvent
         case SDL.eventPayload <$> event of
           Nothing            -> loop
           Just SDL.QuitEvent -> return ()
-          Just (SDL.KeyboardEvent _ _ s _ k) ->
+          Just (SDL.KeyboardEvent _ _ s _ k) -> do
             keyHandler s k
+            loop
           Just (SDL.WindowResized _ _) -> do
+            screenSurface <- SDL.getWindowSurface window
+            screenSurfaceFormat <- SDL.surfaceFormat screenSurface
+            black <- SDL.mapRGB screenSurfaceFormat (V3 minBound minBound minBound)
             SDL.fillRect screenSurface Nothing black
             SDL.updateWindowSurface window
+            loop
           Just e -> do
             print e
             loop
   loop
 
+  SDL.setAudioDevicePlaybackState device SDL.Pause
   SDL.closeAudioDevice device
   SDL.quit
 
