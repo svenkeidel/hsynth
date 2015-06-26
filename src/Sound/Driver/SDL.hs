@@ -8,7 +8,7 @@ import qualified SDL as SDL
 
 import           Data.Word
 import           Data.Int
-import           Data.Stream 
+import           Data.Stream
 import qualified Data.Stream as S
 
 import           Foreign.C.Types
@@ -79,41 +79,3 @@ withSDL keyHandler audioCB = do
   SDL.setAudioDevicePlaybackState device SDL.Pause
   SDL.closeAudioDevice device
   SDL.quit
-
-{-withSDL :: (KeyEvent -> IO ()) -> (Ptr Word8 -> Int -> IO ()) -> IO ()-}
-{-withSDL handle audioCb = do-}
-  {-_ <- SDL.init (SDL.SDL_INIT_VIDEO .|. SDL.SDL_INIT_EVENTS .|. SDL.SDL_INIT_AUDIO)-}
-
-  {-_ <- withCString "hsynth" $ \hsynth -> SDL.createWindow hsynth 0 0 600 400 0-}
-
-  {-cb <- SDL.mkAudioCallback $ (\_ buf len -> audioCb buf (fromIntegral len))-}
-
-  {-let audio_s32_le = 0b1000000000100000-}
-  {-let audioSpec = SDL.AudioSpec-}
-        {-{ SDL.audioSpecFreq = 48000-}
-        {-, SDL.audioSpecFormat = audio_s32_le-}
-        {-, SDL.audioSpecChannels = 1 -}
-        {-, SDL.audioSpecSilence = 0-}
-        {-, SDL.audioSpecSamples = 1024-}
-        {-, SDL.audioSpecSize = 0-}
-        {-, SDL.audioSpecCallback = cb-}
-        {-, SDL.audioSpecUserdata = nullPtr-}
-        {-}-}
-
-  {-alloca $ \want ->-}
-    {-alloca $ \have -> do-}
-      {-poke want audioSpec-}
-      {-_ <- SDL.openAudio want have-}
-      {-SDL.pauseAudio 0 -}
-      {-return ()-}
-
-  {-eventLoop $ \e -> do-}
-    {-case e of-}
-      {-(SDL.QuitEvent _ _) -> return False-}
-      {-(SDL.KeyboardEvent evType _ _ _ _ sym) -> do-}
-        {-mapM_ handle (keySymToEvent evType sym)-}
-        {-return True-}
-      {-_ -> return True-}
-
-  {-SDL.closeAudio-}
-  {-SDL.quit-}

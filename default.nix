@@ -17,7 +17,7 @@ in pkgs.stdenv.mkDerivation {
   name = "hsynth";
   version = "0.1.0.0";
   src = ./.;
-  buildInputs = [ pkgs.pkgconfig pkgs.alsaLib pkgs.SDL2 env ];
+  buildInputs = [ pkgs.pkgconfig pkgs.alsaLib pkgs.SDL2 pkgs.jack2 env ];
   shellHook = ''
     export NIX_GHC="${env}/bin/ghc"
     export NIX_GHCPKG="${env}/bin/ghc-pkg"

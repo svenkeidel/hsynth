@@ -12,12 +12,16 @@ import           Foreign.C.String
 import           Control.Exception (finally)
 import           Text.Printf
 import           System.Posix.Signals
-import           Control.Concurrent(forkIO)
+import           Control.Concurrent.MVar
+import           Sound.Types
+import           Data.Stream (Stream)
+import qualified Data.Stream as S
+import           GHC.Float
 
 #include<jack/jack.h>
 #include<jack/thread.h>
 
-runAudio = undefined
+{-runAudio = undefined-}
 
 data JackClientStruct
 type JackClient = Ptr JackClientStruct
@@ -178,18 +182,6 @@ jackProcess client process = do
 foreign import ccall "jack/jack.h" jack_set_process_callback ::
   JackClient -> JackCallback -> Ptr () -> IO ()
 
-type ShutdownCallback = FunPtr (Ptr () -> IO ())
-foreign import ccall "wrapper"
-  mkShutdownCallback :: (Ptr () -> IO ()) -> IO ShutdownCallback
-
-onShutdown :: JackClient -> IO () -> IO ()
-onShutdown client action = do
-  cb <- mkShutdownCallback (const action)
-  jack_on_shutdown client cb nullPtr
-
-foreign import ccall "jack/jack.h" jack_on_shutdown ::
-  JackClient -> ShutdownCallback -> Ptr () -> IO ()
-
 foreign import ccall "jack/jack.h" jack_activate ::
   JackClient -> IO ()
 
@@ -202,48 +194,56 @@ foreign import ccall "jack/jack.h" jack_get_buffer_size ::
 foreign import ccall "jack/jack.h" jack_get_sample_rate ::
   JackClient -> IO NFrames
 
-type ThreadCreator = FunPtr (Ptr () -> Ptr () -> FunPtr (Ptr () -> IO (Ptr ())) -> Ptr () -> IO CInt)
-foreign import ccall "wrapper"
-  mkThreadCreator :: (Ptr () -> Ptr () -> FunPtr (Ptr () -> IO (Ptr ())) -> Ptr () -> IO CInt) -> IO ThreadCreator
+foreign import ccall "jack/jack.h" jack_connect ::
+  JackClient -> CString -> CString -> IO ()
 
-foreign import ccall "jack/jack.h" jack_set_thread_creator ::
-  ThreadCreator -> IO ()
+jackConnect :: JackClient -> String -> String -> IO ()
+jackConnect client from to =
+  withCString from $ \cfrom ->
+  withCString to $ \cto ->
+    jack_connect client cfrom cto
 
-foreign import ccall "dynamic"
-  callFunPtr :: FunPtr (Ptr () -> IO (Ptr ())) -> Ptr () -> IO (Ptr ())
-
-test :: IO ()
-test = do
-  threadCreator <- mkThreadCreator $ \threadIdPtr _ funPtr arg -> do
-    print "start thread"
-    threadId <- forkIO (putStrLn "call thread" >> callFunPtr funPtr arg >> return ())
-    poke threadIdPtr threadId
-    return 0
-  jack_set_thread_creator threadCreator
-  withClient "hsynth" $ \client ->
-    withOutputPort client "hsynth_out" 0 $ \output -> do
+test :: Audio -> IO ()
+test audio = do
+  sig <- newMVar $ double2CFloat <$> audio
+  withClient "hsynth" $ \client -> do
+    withOutputPort client "out" 0 $ \output -> do
       jackProcess client $ \nframes -> do
-        putStrLn "called"
         buf <- jack_port_get_buffer output nframes
-        store buf 0 (fromIntegral nframes)
-      onShutdown client $ putStrLn "shutdown"
+        modifyMVar_ sig $ store buf nframes
+
       jack_activate client
+
+      jackConnect client "hsynth:out" "system:playback_1"
+      jackConnect client "hsynth:out" "system:playback_2"
+
       putStrLn "Started"
-      awaitSignal $ Just $
-        sigINT `deleteSignal`
-        sigKILL `deleteSignal` fullSignalSet
+
+      awaitSigint
+
       putStrLn "stopped"
+
       return ()
 
+double2CFloat :: Double -> CFloat
+double2CFloat x = CFloat (double2Float x)
+{-# INLINE double2CFloat #-}
 
+awaitSigint :: IO ()
+awaitSigint = do
+    sig <- newEmptyMVar
+    _ <- installHandler keyboardSignal (Catch $ putMVar sig ()) Nothing
+    takeMVar sig
 
-store :: Ptr CFloat -> Int -> Int -> IO ()
-store buf i n
-  | i < n = do
-    pokeElemOff buf i 0
-    store buf (i+1) n
-  | otherwise =
-    return ()
+store :: Ptr CFloat -> NFrames -> Stream CFloat -> IO (Stream CFloat)
+store buf len = go 0
+  where
+    go :: Int -> Stream CFloat -> IO (Stream CFloat)
+    go i s@(S.Cons x xs)
+      | i >= fromIntegral len = return s
+      | otherwise = do
+        pokeElemOff buf i x
+        go (i+1) xs
 
 {-
 import           Control.Concurrent.MVar
