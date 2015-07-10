@@ -28,6 +28,10 @@ flag sdl
   description: Enable sdl support
   default:     False
 
+flag plot
+  description: Enable functionality to plot audio Signals
+  default:     False
+
 library
   exposed-modules:     Data.Stream,
                        Music.Composition,
@@ -79,7 +83,6 @@ library
   if flag(jack)
     pkgconfig-depends: jack
     exposed-modules:   Sound.Driver.Jack
-    c-sources:         cbits/jack.c
 
   if flag(sox)
     build-depends:     sox
@@ -98,6 +101,12 @@ library
     build-depends:     sdl2,
                        linear
     exposed-modules:   Sound.Driver.SDL
+
+  if flag(plot)
+    build-depends:     plot,
+                       plot-gtk,
+                       hmatrix
+    exposed-modules:   Sound.Plot
 
 executable main
   main-is:             Main.hs

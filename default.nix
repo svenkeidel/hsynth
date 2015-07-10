@@ -11,7 +11,7 @@ let lib = pkgs.haskell-ng.lib;
   env = haskellPackages'.ghcWithPackages(p: with p; [
     Cabal cabal-install ghc-core cassava hspec criterion
     random alsa-core explicit-exception pulse-simple
-    binary linear jack
+    binary linear jack plot plot-gtk hmatrix
   ]);
 in pkgs.stdenv.mkDerivation {
   name = "hsynth";
