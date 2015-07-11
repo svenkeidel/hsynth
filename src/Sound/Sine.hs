@@ -20,7 +20,6 @@ sinA freq rate=
   let omh  = 2 * pi * freq / fromIntegral rate
       i    = sin omh
       c    = 2 * cos omh
-      sine = 0 <:> i <:> S.zipWith (\b a -> c * a - b) sine (S.tail sine)
-  in sine
+  in S.unfold (\(y1,y2) -> let y = c * y1 - y2 in (y2,(y,y1))) (i,0)
 {-# INLINE sinA #-}
 
