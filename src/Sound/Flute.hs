@@ -12,8 +12,8 @@ import           Sound.LowFrequencyOscillator
 
 import           System.Random (RandomGen)
 
-type Pressure = Double 
-type Breath = Double 
+type Pressure = Double
+type Breath = Double
 
 flute :: RandomGen g => Duration -> Amplitude -> Frequency -> Pressure -> Breath -> g -> Rate -> Audio
 flute dur amp freq pressure breath g rate =

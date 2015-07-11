@@ -1,4 +1,4 @@
-module Sound.LineSeg where
+module Sound.LineSeg(lineSeg) where
 
 import qualified Data.Stream as S
 
@@ -14,7 +14,7 @@ lineSeg [(a1,d1)] hold rate =
 lineSeg [] hold _ = S.repeat hold
 
 lineSeg' :: Amplitude -> Duration -> Amplitude -> Rate -> Envelope -> Envelope
-lineSeg' a1 dur a2 rate rest = 
+lineSeg' a1 dur a2 rate rest =
   let dr    = dur * fromIntegral rate
       n     = truncate dr
       delta = (a2 - a1) / dr
