@@ -123,7 +123,6 @@ executable hsynth-control
 executable main
   main-is:             Main.hs
   ghc-options:         -O2 -threaded
-  pkgconfig-depends:   jack
   build-depends:       base,
                        hsynth,
                        random,

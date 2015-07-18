@@ -170,17 +170,17 @@ withPort register client portName bufSize handler = do
 
 type NFrames = #{type jack_nframes_t}
 
-type JackCallback = FunPtr (NFrames -> Ptr () -> IO CInt)
+type ProcessCallback = FunPtr (NFrames -> Ptr () -> IO CInt)
 foreign import ccall "wrapper"
-  mkJackCallback :: (NFrames -> Ptr () -> IO CInt) -> IO JackCallback
+  mkProcessCallback :: (NFrames -> Ptr () -> IO CInt) -> IO ProcessCallback
 
 jackProcess :: JackClient -> (NFrames -> IO ()) -> IO ()
 jackProcess client process = do
-  cb <- mkJackCallback (\frames _ -> process (fromIntegral frames) >> return 0)
+  cb <- mkProcessCallback (\frames _ -> process (fromIntegral frames) >> return 0)
   jack_set_process_callback client cb nullPtr
 
 foreign import ccall "jack/jack.h" jack_set_process_callback ::
-  JackClient -> JackCallback -> Ptr () -> IO ()
+  JackClient -> ProcessCallback -> Ptr () -> IO ()
 
 foreign import ccall "jack/jack.h" jack_activate ::
   JackClient -> IO ()
@@ -197,20 +197,87 @@ foreign import ccall "jack/jack.h" jack_get_sample_rate ::
 foreign import ccall "jack/jack.h" jack_connect ::
   JackClient -> CString -> CString -> IO ()
 
+data TransportState =
+  Stopped | Rolling | Starting | NetStarting
+  deriving (Show,Eq)
+
+data PositionStruct
+data Position = Position
+  { bar :: Int
+  , beat :: Int
+  , tick :: Int
+  , barStartTick :: Double
+  , beatPerBar :: Double
+  , beatType :: Double
+  , ticksPerMinute :: Double
+  , beatsPerMinute :: Double
+  , frameTime :: Double
+  , nextTime :: Double
+  } deriving (Show,Eq)
+
+type SyncCallback = FunPtr (CInt -> Ptr PositionStruct -> IO CInt)
+foreign import ccall "wrapper"
+  mkSyncCallback :: (CInt -> Ptr PositionStruct -> IO CInt) -> IO SyncCallback
+
+foreign import ccall "jack/transport.h" jack_set_sync_callback ::
+  JackClient -> SyncCallback -> Ptr () -> IO ()
+
+data ReadyToRoll = ReadyToRoll | NotReady
+
+jackSync :: JackClient -> (TransportState -> Position -> IO ReadyToRoll) -> IO ()
+jackSync client syncCallback = do
+  cb <- mkSyncCallback $ \trans pos -> do
+    pos' <- peekJackPosition pos
+    encodeStatus <$> syncCallback (decodeTransport trans) pos'
+    
+  jack_set_sync_callback client cb nullPtr
+      
+  where
+    decodeTransport :: CInt -> TransportState
+    decodeTransport t = case t of
+      #{const JackTransportStopped}     -> Stopped
+      #{const JackTransportRolling}     -> Rolling
+      #{const JackTransportStarting}    -> Starting
+      #{const JackTransportNetStarting} -> NetStarting
+      _                                 -> error ("deconding jack_transport_state_t: code " ++ show t)
+
+    encodeStatus :: ReadyToRoll -> CInt
+    encodeStatus ReadyToRoll = 1
+    encodeStatus NotReady    = 0
+
+    peekJackPosition :: Ptr PositionStruct -> IO Position
+    peekJackPosition ptr =
+      Position
+        <$> #{peek jack_position_t,bar} ptr
+        <*> #{peek jack_position_t,beat} ptr
+        <*> #{peek jack_position_t,tick} ptr
+        <*> #{peek jack_position_t,bar_start_tick} ptr
+        <*> #{peek jack_position_t,beats_per_bar} ptr
+        <*> #{peek jack_position_t,beat_type} ptr
+        <*> #{peek jack_position_t,ticks_per_beat} ptr
+        <*> #{peek jack_position_t,beats_per_minute} ptr
+        <*> #{peek jack_position_t,frame_time} ptr
+        <*> #{peek jack_position_t,next_time} ptr
+  
+
 jackConnect :: JackClient -> String -> String -> IO ()
 jackConnect client from to =
   withCString from $ \cfrom ->
   withCString to $ \cto ->
     jack_connect client cfrom cto
 
-test :: Audio -> IO ()
-test audio = do
+runAudio :: Audio -> IO ()
+runAudio audio = do
   sig <- newMVar $ double2CFloat <$> audio
   withClient "hsynth" $ \client -> do
     withOutputPort client "out" 0 $ \output -> do
       jackProcess client $ \nframes -> do
         buf <- jack_port_get_buffer output nframes
         modifyMVar_ sig $ store buf nframes
+
+      jackSync client $ \state pos -> do
+        print (state,pos)
+        return ReadyToRoll
 
       jack_activate client
 
