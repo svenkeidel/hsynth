@@ -108,8 +108,8 @@ switch :: Int -> Stream a -> Stream a -> Stream a
 switch 0 _           ys = ys
 switch n (Cons x xs) ys = Cons x (switch (n-1) xs ys)
 
-scan :: (a -> b -> a) -> a -> Stream b -> Stream a
-scan f a (Cons b bs) = Cons a (scan f (f a b) bs)
+scan :: (b -> a -> b) -> b -> Stream a -> Stream b
+scan f b (Cons a as) = Cons b (scan f (f b a) as)
 {-# NOINLINE scan #-}
 
 unfold :: (s -> (a,s)) -> s -> Stream a

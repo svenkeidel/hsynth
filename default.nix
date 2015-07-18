@@ -11,13 +11,13 @@ let lib = pkgs.haskell-ng.lib;
   env = haskellPackages'.ghcWithPackages(p: with p; [
     Cabal cabal-install ghc-core cassava hspec criterion
     random alsa-core explicit-exception pulse-simple
-    binary linear jack plot plot-gtk hmatrix
+    binary linear jack plot plot-gtk hmatrix dbus
   ]);
 in pkgs.stdenv.mkDerivation {
   name = "hsynth";
   version = "0.1.0.0";
   src = ./.;
-  buildInputs = [ pkgs.pkgconfig pkgs.alsaLib pkgs.SDL2 pkgs.jack2 env ];
+  buildInputs = [ pkgs.pkgconfig pkgs.alsaLib pkgs.SDL2 pkgs.jack2 pkgs.dfeet env ];
   shellHook = ''
     export NIX_GHC="${env}/bin/ghc"
     export NIX_GHCPKG="${env}/bin/ghc-pkg"

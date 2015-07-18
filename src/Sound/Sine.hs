@@ -2,7 +2,6 @@ module Sound.Sine where
 
 import           Control.Category
 
-import           Data.Stream ((<:>))
 import qualified Data.Stream as S
 
 import           Sound.Types
