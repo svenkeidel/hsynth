@@ -1,23 +1,15 @@
 { pkgs ? import <nixpkgs> {} }:
 
-let lib = pkgs.haskell-ng.lib;
-  haskellPackages' = pkgs.haskellPackages.override {
-     overrides = self: super: {
-       vector = super.vector.override {
-         mkDerivation = (attrs: self.mkDerivation (attrs // { doCheck = false; }));
-       };
-     };
-   };
-  env = haskellPackages'.ghcWithPackages(p: with p; [
+let env = pkgs.haskellPackages.ghcWithPackages(p: with p; [
     Cabal cabal-install ghc-core cassava hspec criterion
     random alsa-core explicit-exception pulse-simple
-    binary linear jack plot plot-gtk hmatrix dbus
+    binary linear plot plot-gtk hmatrix dbus
   ]);
 in pkgs.stdenv.mkDerivation {
   name = "hsynth";
   version = "0.1.0.0";
   src = ./.;
-  buildInputs = [ pkgs.pkgconfig pkgs.alsaLib pkgs.SDL2 pkgs.jack2 pkgs.dfeet env ];
+  buildInputs = [ pkgs.pkgconfig pkgs.alsaLib pkgs.SDL2 pkgs.libjack2 pkgs.dfeet env ];
   shellHook = ''
     export NIX_GHC="${env}/bin/ghc"
     export NIX_GHCPKG="${env}/bin/ghc-pkg"

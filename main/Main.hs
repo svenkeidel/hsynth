@@ -39,7 +39,7 @@ main = do
   {-let sig pitch vel rate = audio (tuning pitch) vel rate-}
   {-Driver.runAudio sig-}
 
-  Driver.runAudio (0.5 * sinA 440 48000)
+  Driver.runAudio (0.1 * sinA 440 48000)
 
   {-audio freq vel rate = fromIntegral vel / fromIntegral (maxBound :: Velocity) * sinA freq rate-}
   {-audio freq vel rate = 0.5 * sinA freq rate-}

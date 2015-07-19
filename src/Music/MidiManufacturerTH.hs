@@ -40,7 +40,6 @@ instance FromField ManufacturerName where
 
 manufacturerFromCsv :: FilePath -> IO [ManufacturerEntry]
 manufacturerFromCsv fp = do
-  {-fp' <- getDataFileName fp-}
   bs <- BS.readFile fp
   case decodeManufacturer bs of
     Left str -> error str
@@ -90,12 +89,12 @@ deriveManufacturer manufacturers = [manufacturerData,getManufacturer1ByteDec, ge
     getManufacturer1ByteBody =
       let word1 = mkName "word1"
       in DoE [ BindS (VarP word1) (VarE (mkName "B.getWord8"))
-             , NoBindS $ CaseE (VarE word1) 
+             , NoBindS $ CaseE (VarE word1)
                        $ mapMaybe getManufacturer1ByteCase manufacturers
                        ++ [Match WildP (NormalB (AppE (VarE (mkName "getManufacturer3Byte")) (VarE word1))) []]
              ]
 
-    getManufacturer1ByteCase (ManufacturerEntry (OneByte word) (ManufacturerName manufacturer)) = 
+    getManufacturer1ByteCase (ManufacturerEntry (OneByte word) (ManufacturerName manufacturer)) =
       Just $ Match (wordL word)
                    (NormalB (AppE (VarE (mkName "return")) (ConE (mkName manufacturer))))
                    []
@@ -136,9 +135,9 @@ simplifyManufacturerName = camelCase . dropSpecialCharacters . dropSuffix
     mapHead :: (a -> a) -> [a] -> [a]
     mapHead f (a:as) = f a : as
     mapHead _ [] = []
-    
+
     dropSuffix :: String -> String
     dropSuffix = takeWhile (\c -> c /= ',' && c /= '(')
-  
+
     dropSpecialCharacters :: String -> String
     dropSpecialCharacters = map (\c -> if isAlphaNum c || isSpace c then c else ' ')
