@@ -222,6 +222,9 @@ foreign import ccall "wrapper"
 foreign import ccall "jack/transport.h" jack_set_sync_callback ::
   JackClient -> SyncCallback -> Ptr () -> IO ()
 
+{-foreign import ccall "jack/transport.h" jack_transport_query ::-}
+  {-JackClient -> Ptr PositionStruct -> IO ()-}
+
 data ReadyToRoll = ReadyToRoll | NotReady
 
 jackSync :: JackClient -> (TransportState -> Position -> IO ReadyToRoll) -> IO ()
@@ -229,9 +232,9 @@ jackSync client syncCallback = do
   cb <- mkSyncCallback $ \trans pos -> do
     pos' <- peekJackPosition pos
     encodeStatus <$> syncCallback (decodeTransport trans) pos'
-    
+
   jack_set_sync_callback client cb nullPtr
-      
+
   where
     decodeTransport :: CInt -> TransportState
     decodeTransport t = case t of
@@ -245,20 +248,37 @@ jackSync client syncCallback = do
     encodeStatus ReadyToRoll = 1
     encodeStatus NotReady    = 0
 
-    peekJackPosition :: Ptr PositionStruct -> IO Position
-    peekJackPosition ptr =
-      Position
-        <$> #{peek jack_position_t,bar} ptr
-        <*> #{peek jack_position_t,beat} ptr
-        <*> #{peek jack_position_t,tick} ptr
-        <*> #{peek jack_position_t,bar_start_tick} ptr
-        <*> #{peek jack_position_t,beats_per_bar} ptr
-        <*> #{peek jack_position_t,beat_type} ptr
-        <*> #{peek jack_position_t,ticks_per_beat} ptr
-        <*> #{peek jack_position_t,beats_per_minute} ptr
-        <*> #{peek jack_position_t,frame_time} ptr
-        <*> #{peek jack_position_t,next_time} ptr
-  
+peekJackPosition :: Ptr PositionStruct -> IO Position
+peekJackPosition ptr = do
+  valid <- #{peek jack_position_t,valid} ptr :: IO #{type jack_position_bits_t}
+  print (valid .&. #{const JackPositionBBT} /= 0)
+  print (valid .&. #{const JackPositionTimecode} /= 0)
+  print (valid .&. #{const JackBBTFrameOffset} /= 0)
+  Position
+    <$> fromCInt #{peek jack_position_t,bar}
+    <*> fromCInt #{peek jack_position_t,beat}
+    <*> fromCInt #{peek jack_position_t,tick}
+    <*> fromCDouble #{peek jack_position_t,bar_start_tick}
+    <*> fromCFloat #{peek jack_position_t,beats_per_bar}
+    <*> fromCFloat #{peek jack_position_t,beat_type}
+    <*> fromCDouble #{peek jack_position_t,ticks_per_beat}
+    <*> fromCDouble #{peek jack_position_t,beats_per_minute}
+    <*> fromCDouble #{peek jack_position_t,frame_time}
+    <*> fromCDouble #{peek jack_position_t,next_time}
+
+  where
+    fromCInt :: (Ptr PositionStruct -> IO CInt) -> IO Int
+    fromCInt f = fromIntegral <$> f ptr
+    {-# INLINE fromCInt #-}
+
+    fromCDouble :: (Ptr PositionStruct -> IO CDouble) -> IO Double
+    fromCDouble f = realToFrac <$> f ptr
+    {-# INLINE fromCDouble #-}
+
+    fromCFloat :: (Ptr PositionStruct -> IO CFloat) -> IO Double
+    fromCFloat f = realToFrac <$> f ptr
+    {-# INLINE fromCFloat #-}
+
 
 jackConnect :: JackClient -> String -> String -> IO ()
 jackConnect client from to =

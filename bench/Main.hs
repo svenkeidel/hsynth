@@ -16,9 +16,11 @@ import           Music.VoiceMap (VoiceMap)
 import qualified Music.VoiceMap as VM
 import           Music.Tuning.EqualTemperament
 
+import           Sound.Sine
 import           Sound.Types
 import           Sound.Flute
 import           Sound.Sample
+import           Sound.AllPassFilter
 
 import qualified System.Random as R
 
@@ -35,7 +37,7 @@ main = do
       benchSize = 1024
 
   defaultMain
-    [ bgroup "Voice Map" $
+    [ bgroup "VoiceMap"
       [ bench "single values/Vector" $ nf (getVector benchSize) vm
       , bench "single values/List" $ nf (getList benchSize) vm
       , bench "batch/Vector"  $ nf (fst . batchVector benchSize) vm
@@ -43,11 +45,18 @@ main = do
       , bench "batch/Vector/Primitive"  $ nf (fst . batchVectorPrimitive benchSize) vm
       , bench "batch/List"  $ nf (fst . batchList benchSize) vm
       ]
+    , let n = 48000 * 5
+      in bgroup "AllPassFilter"
+      [ bench "100" $ nf (allPassFilter 100 0.5 (sinA 440 48000) S.!!) n
+      , bench "1000" $ nf (allPassFilter 1000 0.5 (sinA 440 48000) S.!!) n
+      , bench "10000" $ nf (allPassFilter 10000 0.5 (sinA 440 48000) S.!!) n
+      , bench "control" $ nf (sinA 440 48000 S.!!) n
+      ]
     ]
 
   where
     tuning = equalTemperament twelveTET a440 . fromMidiPitch
-    
+
     --
 
     singleValue :: VoiceMap -> (Double,VoiceMap)
