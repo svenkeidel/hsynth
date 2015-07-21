@@ -110,18 +110,6 @@ library
                        hmatrix
     exposed-modules:   Sound.Plot
 
-executable hsynth-control
-  main-is:             HSynthControl.hs
-  ghc-options:         -O2 -threaded
-  build-depends:       base,
-                       containers,
-                       directory,
-                       process,
-                       text,
-                       dbus
-  hs-source-dirs:      hsynth-control
-  default-language:    Haskell2010
-
 executable main
   main-is:             Main.hs
   ghc-options:         -O2 -threaded

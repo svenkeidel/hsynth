@@ -3,7 +3,7 @@
 let env = pkgs.haskellPackages.ghcWithPackages(p: with p; [
     Cabal cabal-install ghc-core cassava hspec criterion
     random alsa-core explicit-exception pulse-simple
-    binary linear plot plot-gtk hmatrix dbus
+    binary linear plot plot-gtk hmatrix
   ]);
 in pkgs.stdenv.mkDerivation {
   name = "hsynth";
