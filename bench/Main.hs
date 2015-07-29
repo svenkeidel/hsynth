@@ -1,6 +1,5 @@
 module Main where
 
-{-import           Control.Monad.Primitive-}
 import           Criterion.Main
 
 import qualified Data.Stream as S
@@ -18,40 +17,38 @@ import           Music.Tuning.EqualTemperament
 
 import           Sound.Sine
 import           Sound.Types
-import           Sound.Flute
 import           Sound.Sample
 import           Sound.AllPassFilter
 
-import qualified System.Random as R
-
 main :: IO ()
 main = do
-  g <- R.newStdGen
-  let audio freq rate = flute 5 0.5 freq 0.9 0.02 g rate
-      sig p rate = Sample (audio (tuning p) rate) (const [])
-      sampleRate = 48000
-      vm = VM.noteOn 64 (sig 64 sampleRate)
-         $ VM.noteOn 65 (sig 65 sampleRate)
-         $ VM.noteOn 66 (sig 66 sampleRate)
-         $ VM.empty
-      benchSize = 1024
 
   defaultMain
-    [ bgroup "VoiceMap"
-      [ bench "single values/Vector" $ nf (getVector benchSize) vm
-      , bench "single values/List" $ nf (getList benchSize) vm
-      , bench "batch/Vector"  $ nf (fst . batchVector benchSize) vm
-      , bench "batch/Vector/Storable"  $ nf (fst . batchVectorStorable benchSize) vm
-      , bench "batch/Vector/Primitive"  $ nf (fst . batchVectorPrimitive benchSize) vm
-      , bench "batch/List"  $ nf (fst . batchList benchSize) vm
-      ]
-    , let n = 48000 * 5
+    [ let audio freq rate = sinA freq rate
+          sig p rate = Sample (audio (tuning p) rate) (const [])
+          sampleRate = 48000
+          vm = VM.noteOn 64 (sig 64 sampleRate)
+             $ VM.noteOn 65 (sig 65 sampleRate)
+             $ VM.noteOn 66 (sig 66 sampleRate)
+             $ VM.empty
+          benchSize = 1024
+      in bgroup "VoiceMap"
+          [ bench "single values/Vector" $ nf (getVector benchSize) vm
+          , bench "single values/List" $ nf (getList benchSize) vm
+          , bench "batch/Vector"  $ nf (fst . batchVector benchSize) vm
+          , bench "batch/Vector/Storable"  $ nf (fst . batchVectorStorable benchSize) vm
+          , bench "batch/Vector/Primitive"  $ nf (fst . batchVectorPrimitive benchSize) vm
+          , bench "batch/List"  $ nf (fst . batchList benchSize) vm
+          ]
+    , let sampleRate = 48000
+          n = sampleRate * 5
+          instrument = sinA 440 sampleRate
       in bgroup "AllPassFilter"
-      [ bench "100" $ nf (allPassFilter 100 0.5 (sinA 440 48000) S.!!) n
-      , bench "1000" $ nf (allPassFilter 1000 0.5 (sinA 440 48000) S.!!) n
-      , bench "10000" $ nf (allPassFilter 10000 0.5 (sinA 440 48000) S.!!) n
-      , bench "control" $ nf (sinA 440 48000 S.!!) n
-      ]
+          [ bench "100" $ nf (allPassFilter 100 0.5 instrument S.!!) n
+          , bench "1000" $ nf (allPassFilter 1000 0.5 instrument S.!!) n
+          , bench "10000" $ nf (allPassFilter 10000 0.5 instrument S.!!) n
+          , bench "control" $ nf (instrument S.!!) n
+          ]
     ]
 
   where
@@ -74,7 +71,7 @@ main = do
       VM.mapAccumNotes (mixSampleVector n) (curry id) (V.replicate n 0) vm
 
     mixSampleVector :: Int -> Vector Double -> Audio -> (Vector Double, Audio)
-    mixSampleVector n sample audio = 
+    mixSampleVector n sample audio =
       let (sample',audio') = S.splitAt (fromIntegral n) audio
       in (V.zipWith (+) sample (V.fromList sample'),audio')
 
@@ -85,7 +82,7 @@ main = do
       VM.mapAccumNotes (mixSampleList n) (curry id) (replicate n 0) vm
 
     mixSampleList :: Int -> [Double] -> Audio -> ([Double], Audio)
-    mixSampleList n sample audio = 
+    mixSampleList n sample audio =
       let (sample',audio') = S.splitAt (fromIntegral n) audio
       in (zipWith (+) sample sample',audio')
 
@@ -96,7 +93,7 @@ main = do
       VM.mapAccumNotes (mixSampleStorable n) (curry id) (VS.replicate n 0) vm
 
     mixSampleStorable :: Int -> VS.Vector Double -> Audio -> (VS.Vector Double, Audio)
-    mixSampleStorable n sample audio = 
+    mixSampleStorable n sample audio =
       let (sample',audio') = S.splitAt (fromIntegral n) audio
       in (VS.zipWith (+) sample (VS.fromList sample'),audio')
 
@@ -107,6 +104,6 @@ main = do
       VM.mapAccumNotes (mixSampleVectorPrimitive n) (curry id) (VP.replicate n 0) vm
 
     mixSampleVectorPrimitive :: Int -> VP.Vector Double -> Audio -> (VP.Vector Double, Audio)
-    mixSampleVectorPrimitive n sample audio = 
+    mixSampleVectorPrimitive n sample audio =
       let (sample',audio') = S.splitAt (fromIntegral n) audio
       in (VP.zipWith (+) sample (VP.fromList sample'),audio')

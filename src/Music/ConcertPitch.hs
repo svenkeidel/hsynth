@@ -5,7 +5,7 @@ import qualified Music.Pitch as P
 
 import           Sound.Types (Frequency)
 
-data ConcertPitch = ConcertPitch 
+data ConcertPitch = ConcertPitch
   { pitch     :: Pitch
   , frequency :: Frequency
   }

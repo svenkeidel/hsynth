@@ -9,17 +9,22 @@ module Data.Stream
   , repeat
   , zip
   , zipWith
-  , head
-  , tail
   , take
   , splitAt
   , (!!)
   , (<:>)
+  , Reactive(..)
+  , unfoldR
+  , supply
+  , react
+  , reacting
+  , Streamable(..)
   ) where
 
 import Prelude hiding ((!!),iterate,zipWith,zipWith3,head,tail,repeat,take,splitAt,map,zip)
 import Control.Arrow
 
+-- Stream a isomorphic to Cofree Identity a
 data Stream a = Cons !a (Stream a)
 
 (<:>) :: a -> Stream a -> Stream a
@@ -134,14 +139,6 @@ zipWith :: (a -> b -> c) -> Stream a -> Stream b -> Stream c
 zipWith f as bs = fmap (uncurry f) (zip as bs)
 {-# INLINE zipWith #-}
 
-head :: Stream a -> a
-head (Cons a _) = a
-{-# INLINE CONLIKE head #-}
-
-tail :: Stream a -> Stream a
-tail (Cons _ as) = as
-{-# INLINE CONLIKE tail #-}
-
 (!!) :: Stream a -> Int -> a
 Cons a _ !! 0 = a
 Cons _ s !! n = s !! (n-1)
@@ -170,3 +167,34 @@ splitAt n (Cons x xs) =
 "scan/zip/left"    forall f z0 as bs. zip (scan f z0 as) bs = scan (\(s,_) (a,b) -> (f s a,b)) (z0,head bs) (zip as bs)
 "scan/zip/right"   forall f z0 as bs. zip as (scan f z0 bs) = scan (\(_,s) (a,b) -> (a,f s b)) (head as,z0) (zip as bs)
   #-}
+
+-- Reactive m a isomorphic to Cofree (Product ((->) m) Identity) a
+data Reactive m a = Reactive a (Reactive m a) (m -> Reactive m a)
+
+unfoldR :: (s -> (a,s)) -> (m -> s -> s) -> s -> Reactive m a
+unfoldR f ms s0 =
+  let (a,s) = f s0
+  in Reactive a (unfoldR f ms s) (\m -> unfoldR f ms (ms m s0))
+
+supply :: [(Int,m)] -> Reactive m a -> Stream a
+supply ((0,m):rs) (Reactive _ _ react)  = supply rs (react m)
+supply ((n,m):rs) (Reactive a as _)     = Cons a (supply ((n-1,m):rs) as)
+supply []         (Reactive a as _)     = Cons a (supply [] as)
+
+react :: m -> Reactive m a -> Reactive m a
+react m (Reactive _ _ f) = f m
+
+reacting :: Foldable f => f m -> Reactive m a -> Reactive m a
+reacting m r = foldr react r m
+
+class Streamable s where
+  head :: s a -> a
+  tail :: s a -> s a
+
+instance Streamable Stream where
+  head (Cons a _)  = a
+  tail (Cons _ as) = as
+
+instance Streamable (Reactive m) where
+  head (Reactive a _ _)  = a
+  tail (Reactive _ as _) = as

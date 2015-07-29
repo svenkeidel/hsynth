@@ -15,9 +15,9 @@ type ChunkSize = Int
 {-runAudio8 rate stream = hRunAudio stdout 1024 rate (fmap quantizeUnsigned8 stream)-}
 {-[># INLINE runAudio8 #<]-}
 
-runAudio16 :: Stream Double -> IO ()
-runAudio16 = hRunAudio stdout . fmap (int16LE . quantizeSigned16)
-{-# INLINE runAudio16 #-}
+runAudio :: Stream Double -> IO ()
+runAudio = hRunAudio stdout . fmap (int16LE . quantizeSigned16)
+{-# INLINE runAudio #-}
 
 {-runAudio32 :: Rate -> Stream Double -> IO ()-}
 {-runAudio32 rate stream = hRunAudio stdout 1024 rate (fmap quantizeSigned32 stream)-}

@@ -1,27 +1,38 @@
 {-# LANGUAGE RankNTypes #-}
 module Sound.Driver.Jack where
 
-import           Data.Word
+import           Control.Concurrent.MVar
+import           Control.Exception (finally)
+import           Control.Monad(forM)
+
+import qualified Data.Binary.Get as G
 import           Data.Bits
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Unsafe as B
 import           Data.Maybe
+import           Data.Stream (Reactive,Streamable)
+import qualified Data.Stream as S
+import           Data.Word
+
 import           Foreign.Storable
 import           Foreign.Ptr
 import           Foreign.Marshal.Alloc
 import           Foreign.C.Types
 import           Foreign.C.String
-import           Control.Exception (finally)
-import           Text.Printf
-import           System.Posix.Signals
-import           Control.Concurrent.MVar
-import           Sound.Types
-import           Data.Stream (Stream)
-import qualified Data.Stream as S
+
 import           GHC.Float
 
-#include<jack/jack.h>
-#include<jack/thread.h>
+import           Music.Midi
 
-{-runAudio = undefined-}
+import           System.Posix.Signals
+
+import           Sound.Types
+
+import           Text.Printf
+
+#include<jack/jack.h>
+#include<jack/midiport.h>
+#include<jack/thread.h>
 
 data JackClientStruct
 type JackClient = Ptr JackClientStruct
@@ -82,6 +93,7 @@ openClient name options = do
 
 
 foreign import ccall "jack/jack.h" jack_client_close :: JackClient -> IO ()
+
 closeClient :: JackClient -> IO ()
 closeClient = jack_client_close
 
@@ -96,16 +108,15 @@ withClient name handle = do
 data AudioFormat = AudioFormat NumberFormat SampleBitSize Channels
 data NumberFormat = SignedInteger | UnsignedInteger | Float
 type SampleBitSize = Int
-type Channels = Int
+data Channels = Mono | Stereo
 
 instance Show AudioFormat where
   show (AudioFormat numFormat sampleBitSize channels) =
-    printf "%d bit %s %s audio" sampleBitSize (show numFormat) (showChannels channels)
+    printf "%d bit %s %s audio" sampleBitSize (show numFormat) (show channels)
 
-showChannels :: Channels -> String
-showChannels 1 = "mono"
-showChannels 2 = "stereo"
-showChannels _ = error "unknown channels"
+instance Show Channels where
+  show Mono = "mono"
+  show Stereo = "stereo"
 
 instance Show NumberFormat where
   show SignedInteger = "signed integer"
@@ -113,7 +124,7 @@ instance Show NumberFormat where
   show Float = "float"
 
 defaultAudioFormat :: AudioFormat
-defaultAudioFormat = AudioFormat Float 32 1
+defaultAudioFormat = AudioFormat Float 32 Mono
 
 data PortStruct
 newtype Port a = Port (Ptr PortStruct)
@@ -125,13 +136,22 @@ foreign import ccall "jack/jack.h" jack_port_unregister ::
   JackClient -> Port a -> IO ()
 
 data Input
-data Output
 
 registerInputPort :: JackClient -> String -> Int -> IO (Maybe (Port Input))
-registerInputPort = registerPort defaultAudioFormat #{const JackPortIsInput}
+registerInputPort = registerPort (show defaultAudioFormat) #{const JackPortIsInput}
+
+data Output
 
 registerOutputPort :: JackClient -> String -> Int -> IO (Maybe (Port Output))
-registerOutputPort = registerPort defaultAudioFormat #{const JackPortIsOutput}
+registerOutputPort = registerPort (show defaultAudioFormat) #{const JackPortIsOutput}
+
+data MidiInput
+
+registerMidiInputPort :: JackClient -> String -> Int -> IO (Maybe (Port MidiInput))
+registerMidiInputPort = registerPort defaultMidiFormat #{const JackPortIsInput}
+
+defaultMidiFormat :: String
+defaultMidiFormat = "8 bit raw midi"
 
 port :: Functor f => (forall a. Ptr a -> f (Ptr a)) -> Port b -> f (Port b)
 port f (Port ptr) = Port <$> f ptr
@@ -142,10 +162,10 @@ isNullPtr ptr
   | otherwise      = Just ptr
 
 type PortFlags = CULong
-registerPort :: AudioFormat -> PortFlags -> JackClient -> String -> Int -> IO (Maybe (Port a))
-registerPort audioFormat flags client portName bufSize =
+registerPort :: String -> PortFlags -> JackClient -> String -> Int -> IO (Maybe (Port a))
+registerPort format flags client portName bufSize =
   withCString portName $ \cportName ->
-    withCString (show audioFormat) $ \caudioFormat ->
+    withCString format $ \caudioFormat ->
       port isNullPtr <$>
         jack_port_register client cportName caudioFormat flags (fromIntegral bufSize)
 
@@ -157,6 +177,9 @@ withInputPort = withPort registerInputPort
 
 withOutputPort :: JackClient -> String -> Int -> (Port Output -> IO ()) -> IO ()
 withOutputPort = withPort registerOutputPort
+
+withMidiInputPort :: JackClient -> String -> Int -> (Port MidiInput -> IO ()) -> IO ()
+withMidiInputPort = withPort registerMidiInputPort
 
 withPort :: (JackClient -> String -> Int -> IO (Maybe (Port a)))
           -> JackClient -> String -> Int -> (Port a -> IO ()) -> IO ()
@@ -197,88 +220,35 @@ foreign import ccall "jack/jack.h" jack_get_sample_rate ::
 foreign import ccall "jack/jack.h" jack_connect ::
   JackClient -> CString -> CString -> IO ()
 
-data TransportState =
-  Stopped | Rolling | Starting | NetStarting
-  deriving (Show,Eq)
+foreign import ccall "jack/midiport.h" jack_midi_get_event_count ::
+  Ptr a -> IO CUInt
 
-data PositionStruct
-data Position = Position
-  { bar :: Int
-  , beat :: Int
-  , tick :: Int
-  , barStartTick :: Double
-  , beatPerBar :: Double
-  , beatType :: Double
-  , ticksPerMinute :: Double
-  , beatsPerMinute :: Double
-  , frameTime :: Double
-  , nextTime :: Double
-  } deriving (Show,Eq)
+foreign import ccall "jack/midiport.h" jack_midi_event_get ::
+  Ptr MidiEvent -> Ptr a -> CUInt -> IO CInt
 
-type SyncCallback = FunPtr (CInt -> Ptr PositionStruct -> IO CInt)
-foreign import ccall "wrapper"
-  mkSyncCallback :: (CInt -> Ptr PositionStruct -> IO CInt) -> IO SyncCallback
+data MidiEventStruct
+data MidiEvent = MidiEvent
+  { time   :: NFrames
+  , size   :: CSize
+  , buffer :: Ptr CChar
+  }
 
-foreign import ccall "jack/transport.h" jack_set_sync_callback ::
-  JackClient -> SyncCallback -> Ptr () -> IO ()
-
-{-foreign import ccall "jack/transport.h" jack_transport_query ::-}
-  {-JackClient -> Ptr PositionStruct -> IO ()-}
-
-data ReadyToRoll = ReadyToRoll | NotReady
-
-jackSync :: JackClient -> (TransportState -> Position -> IO ReadyToRoll) -> IO ()
-jackSync client syncCallback = do
-  cb <- mkSyncCallback $ \trans pos -> do
-    pos' <- peekJackPosition pos
-    encodeStatus <$> syncCallback (decodeTransport trans) pos'
-
-  jack_set_sync_callback client cb nullPtr
-
-  where
-    decodeTransport :: CInt -> TransportState
-    decodeTransport t = case t of
-      #{const JackTransportStopped}     -> Stopped
-      #{const JackTransportRolling}     -> Rolling
-      #{const JackTransportStarting}    -> Starting
-      #{const JackTransportNetStarting} -> NetStarting
-      _                                 -> error ("deconding jack_transport_state_t: code " ++ show t)
-
-    encodeStatus :: ReadyToRoll -> CInt
-    encodeStatus ReadyToRoll = 1
-    encodeStatus NotReady    = 0
-
-peekJackPosition :: Ptr PositionStruct -> IO Position
-peekJackPosition ptr = do
-  valid <- #{peek jack_position_t,valid} ptr :: IO #{type jack_position_bits_t}
-  print (valid .&. #{const JackPositionBBT} /= 0)
-  print (valid .&. #{const JackPositionTimecode} /= 0)
-  print (valid .&. #{const JackBBTFrameOffset} /= 0)
-  Position
-    <$> fromCInt #{peek jack_position_t,bar}
-    <*> fromCInt #{peek jack_position_t,beat}
-    <*> fromCInt #{peek jack_position_t,tick}
-    <*> fromCDouble #{peek jack_position_t,bar_start_tick}
-    <*> fromCFloat #{peek jack_position_t,beats_per_bar}
-    <*> fromCFloat #{peek jack_position_t,beat_type}
-    <*> fromCDouble #{peek jack_position_t,ticks_per_beat}
-    <*> fromCDouble #{peek jack_position_t,beats_per_minute}
-    <*> fromCDouble #{peek jack_position_t,frame_time}
-    <*> fromCDouble #{peek jack_position_t,next_time}
-
-  where
-    fromCInt :: (Ptr PositionStruct -> IO CInt) -> IO Int
-    fromCInt f = fromIntegral <$> f ptr
-    {-# INLINE fromCInt #-}
-
-    fromCDouble :: (Ptr PositionStruct -> IO CDouble) -> IO Double
-    fromCDouble f = realToFrac <$> f ptr
-    {-# INLINE fromCDouble #-}
-
-    fromCFloat :: (Ptr PositionStruct -> IO CFloat) -> IO Double
-    fromCFloat f = realToFrac <$> f ptr
-    {-# INLINE fromCFloat #-}
-
+getMidiEvents :: Port MidiInput -> NFrames -> IO [MidiMessage]
+getMidiEvents midiPort nframes = do
+  buf <- jack_port_get_buffer midiPort nframes
+  cnt <- jack_midi_get_event_count buf
+  allocaBytes #{size jack_midi_event_t} $ \eventPtr ->
+    fmap catMaybes $ forM [0..cnt] $ \i -> do
+      valid <- jack_midi_event_get eventPtr buf i
+      s <- #{peek jack_midi_event_t,size} eventPtr :: IO CSize
+      b <- #{peek jack_midi_event_t,buffer} eventPtr :: IO (Ptr Word8)
+      if b == nullPtr || valid /= 0
+        then return Nothing
+        else do
+          bs <- B.unsafePackCStringFinalizer b (fromIntegral s) (return ())
+          let msg = Just $ G.runGet getMessage $ BL.fromStrict bs
+          print msg
+          return msg
 
 jackConnect :: JackClient -> String -> String -> IO ()
 jackConnect client from to =
@@ -286,31 +256,41 @@ jackConnect client from to =
   withCString to $ \cto ->
     jack_connect client cfrom cto
 
+runAudioWithMidi :: Reactive MidiMessage Double -> IO ()
+runAudioWithMidi r0 = do
+  sig <- newMVar r0
+  withClient "hsynth" $ \client -> do
+    withOutputPort client "out" 0 $ \output -> do
+      withMidiInputPort client "midi_in" 0 $ \midiIn -> do
+        jackProcess client $ \nframes -> do
+          evnts <- getMidiEvents midiIn nframes
+          buf <- jack_port_get_buffer output nframes
+          modifyMVar_ sig $ store buf nframes . S.reacting evnts
+        jackStartup client
+
 runAudio :: Audio -> IO ()
 runAudio audio = do
-  sig <- newMVar $ double2CFloat <$> audio
+  sig <- newMVar audio
   withClient "hsynth" $ \client -> do
     withOutputPort client "out" 0 $ \output -> do
       jackProcess client $ \nframes -> do
         buf <- jack_port_get_buffer output nframes
         modifyMVar_ sig $ store buf nframes
 
-      jackSync client $ \state pos -> do
-        print (state,pos)
-        return ReadyToRoll
+      jackStartup client
 
-      jack_activate client
+jackStartup :: JackClient -> IO ()
+jackStartup client = do
+  jack_activate client
 
-      jackConnect client "hsynth:out" "system:playback_1"
-      jackConnect client "hsynth:out" "system:playback_2"
+  jackConnect client "hsynth:out" "system:playback_1"
+  jackConnect client "hsynth:out" "system:playback_2"
 
-      putStrLn "Started"
+  putStrLn "started"
 
-      awaitSigint
+  awaitSigint
 
-      putStrLn "stopped"
-
-      return ()
+  putStrLn "stopped"
 
 double2CFloat :: Double -> CFloat
 double2CFloat x = CFloat (double2Float x)
@@ -318,108 +298,15 @@ double2CFloat x = CFloat (double2Float x)
 
 awaitSigint :: IO ()
 awaitSigint = do
-    sig <- newEmptyMVar
-    _ <- installHandler keyboardSignal (Catch $ putMVar sig ()) Nothing
-    takeMVar sig
+  sig <- newEmptyMVar
+  _ <- installHandler keyboardSignal (Catch $ putMVar sig ()) Nothing
+  takeMVar sig
 
-store :: Ptr CFloat -> NFrames -> Stream CFloat -> IO (Stream CFloat)
+store :: Streamable s => Ptr CFloat -> NFrames -> s Double -> IO (s Double)
 store buf len = go 0
   where
-    go :: Int -> Stream CFloat -> IO (Stream CFloat)
-    go i s@(S.Cons x xs)
+    go i s
       | i >= fromIntegral len = return s
       | otherwise = do
-        pokeElemOff buf i x
-        go (i+1) xs
-
-{-
-import           Control.Concurrent.MVar
-import           Control.Monad.Trans
-import           Control.Monad.Exception.Synchronous
-
-import           Data.Array.Storable (writeArray)
-import qualified Data.ByteString.Lazy as B
-import           Data.Vector.Primitive (Vector)
-import qualified Data.Vector.Primitive as V
-
-import           Foreign.C.Types (CFloat(..))
-import           Foreign.C.Error(Errno)
-
-import           GHC.Float
-
-import           Sound.JACK (NFrames(..),Output,Input)
-import           Sound.JACK.Audio (Port)
-import qualified Sound.JACK.Audio as Audio
-import qualified Sound.JACK as JACK
-import qualified Sound.JACK.MIDI as MIDI
-import           Sound.Sample
-import           Sound.Types
-
-import qualified Data.Stream as S
-
-import           Music.Midi
-import           Music.VoiceMap (VoiceMap)
-import qualified Music.VoiceMap as VM
-
-type Synthesizer = Pitch -> Velocity -> Rate -> Sample
-
-runAudio :: Synthesizer -> IO ()
-runAudio synth = do
-  sig <- newMVar VM.empty
-  start "hsynth" synth sig
-
-start :: String -> Synthesizer -> MVar VoiceMap -> IO ()
-start name synth vm = do
-  JACK.handleExceptions $
-      JACK.withClientDefault name $ \client ->
-      MIDI.withPort client "input" $ \input ->
-      JACK.withPort client "output" $ \output -> do
-        rate <- lift $ JACK.getSampleRate client
-        JACK.withProcess client (render synth vm input output rate) $
-            JACK.withActivation client $ lift $ do
-                putStrLn $ "started " ++ name ++ "..."
-                JACK.waitForBreak
-
-render :: Synthesizer -> MVar VoiceMap -> MIDI.Port Input -> Port Output -> Rate -> NFrames -> ExceptionalT Errno IO ()
-render synth mvm input output rate nframes@(NFrames n) = do
-  lift $ print "called"
-  rawMidiEvents <- MIDI.readRawEventsFromPort input nframes
-  let midiMsgs = concat $ map (getMessages . B.fromStrict . MIDI.rawEventBuffer) rawMidiEvents
-  lift $ do
-    printMidiMsg $ filterMidiMsg midiMsgs
-    out <- Audio.getBufferArray output nframes
-    modifyMVar_ mvm $ \vm -> do
-      let vm' = foldr (VM.interpret (\pitch vel -> synth pitch vel rate)) vm midiMsgs
-      let (sample,vm'') = VM.mapAccumNotes mixSample mixSampleList emptySample vm'
-      write out 0 (V.toList sample)
-      return vm''
-    write out 0 (repeat 0 :: [Double])
-  where
-    emptySample = V.replicate (fromIntegral n) 0
-
-    filterMidiMsg :: [MidiMessage] -> [MidiMessage]
-    filterMidiMsg = filter (\msg -> case msg of SystemRealTime _ -> False; _ -> True)
-
-    printMidiMsg :: [MidiMessage] -> IO ()
-    printMidiMsg [] = return ()
-    printMidiMsg l = print l
-
-    mixSample :: Vector Double -> Audio -> (Vector Double, Audio)
-    mixSample sample audio =
-      let (sample',audio') = S.splitAt (fromIntegral n) audio
-      in (V.zipWith (+) sample (V.fromList sample'),audio')
-
-    mixSampleList :: Vector Double -> [Double] -> (Vector Double, [Double])
-    mixSampleList sample audio =
-      let (sample',audio') = splitAt (fromIntegral n) audio
-      in (V.zipWith (+) sample (V.fromList sample'),audio')
-
-    write out i (amp:samp) | i < n = do
-      writeArray out (NFrames i) (double2CFloat amp)
-      write out (i+1) samp
-    write _ _ _ = return ()
-
-double2CFloat :: Double -> CFloat
-double2CFloat x = CFloat (double2Float x)
-{-# INLINE double2CFloat #-}
--}
+        pokeElemOff buf i (double2CFloat (S.head s))
+        go (i+1) (S.tail s)

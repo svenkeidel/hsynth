@@ -82,29 +82,4 @@ horizontal pc = case pc of
     Fff ->  3; Ff ->  4; F ->  5; Fs ->  6; Fss ->  7
     Gff ->  5; Gf ->  6; G ->  7; Gs ->  8; Gss ->  9
     Aff ->  7; Af ->  8; A ->  9; As -> 10; Ass -> 11
-    Bff ->  9; Bf -> 10; B -> 11; Bs -> 12; Bss -> 13 
-
--- 
--- transpose :: Int -> Pitch -> Pitch
--- transpose i (Pitch n) = Pitch (n+i)
--- {-# INLINE transpose #-}
--- 
--- type Octave = Int
---   
--- pitch :: PitchClass -> Octave -> Pitch
--- pitch pc octave = Pitch $ pitchClassToInt pc + octave * 12
--- {-# INLINE pitch #-}
-
--- pitchToFrequency440 :: Pitch -> Frequency
--- pitchToFrequency440 = pitchToFrequency 440
--- {-# INLINE pitchToFrequency440 #-}
--- 
--- type ConcertPitch = Frequency
--- 
--- pitchToFrequency :: ConcertPitch -> Pitch -> Frequency
--- pitchToFrequency concertPitch (Pitch n) =
---   2 ** ((n'-57)/12) * concertPitch
---   where
---     n' = fromIntegral n
--- {-# INLINE pitchToFrequency #-}
-
+    Bff ->  9; Bf -> 10; B -> 11; Bs -> 12; Bss -> 13
