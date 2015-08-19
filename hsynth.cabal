@@ -144,6 +144,18 @@ executable example-stdout
     buildable:         False
   default-language:    Haskell2010
 
+executable example-flute
+  main-is:             ExampleFlute.hs
+  hs-source-dirs:      examples
+  if flag(examples)
+    build-depends:       base,
+                         hsynth,
+                         optparse-applicative,
+                         random
+  else
+    buildable:         False
+  default-language:    Haskell2010
+
 test-suite specs
   type:                exitcode-stdio-1.0
   ghc-options:         -Wall

@@ -13,7 +13,7 @@ main features are
 
  * Lazy infinite streams to represent audio signals
  * Stream fusion
- * Support for multiple audio drivers: Jack, ALSA, Pulseaudio, SDL, Stdout/SoX
+ * Support for multiple audio drivers: Jack, Stdout/SoX, ALSA, Pulseaudio, SDL
  * Support for MIDI
  * Plotting of audio signals
  * Support for multiple tuning systems: 12-tone equal temperament, pythagorean tuning
@@ -31,14 +31,17 @@ main features are
 
     ```
     cabal sandbox init
-    cabal configure -fjack -fexamples
+    cabal configure -fexamples
     cabal build
 
-    # start the jack server
-    ./dist/build/example-jack/example-jack
+    # Install SoX and listen
+    ./play-sox.sh ./dist/build/example-flute/example-flute
 
-    # if this does not work, you can use SoX to play the audio
-    ./dist/build/example-stdout/example-stdout | play -t raw -b 16 -e signed -c 1 -r 48000 -
+    # You can also play around with the parameters of the flute
+    ./play-sox.sh ./dist/build/example-flute/example-flute \
+        --breath 0.15 \
+	--pressure 0.85 \
+	--frequency 400
     ```
 
 # Roadmap

@@ -10,13 +10,16 @@ import           Data.Bits
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Unsafe as B
 import           Data.Maybe
-import           Data.Stream (Reactive,Streamable)
+import           Data.Stream (Reactive)
 import qualified Data.Stream as S
 import           Data.Word
+import qualified Data.Vector.Storable as V
+import           Data.Vector.Storable (Vector)
 
 import           Foreign.Storable
 import           Foreign.Ptr
 import           Foreign.Marshal.Alloc
+import           Foreign.Marshal.Utils
 import           Foreign.C.Types
 import           Foreign.C.String
 
@@ -212,7 +215,7 @@ foreign import ccall "jack/jack.h" jack_port_get_buffer ::
   Port a -> NFrames -> IO (Ptr b)
 
 foreign import ccall "jack/jack.h" jack_get_buffer_size ::
-  JackClient -> IO (Ptr b)
+  JackClient -> IO NFrames
 
 foreign import ccall "jack/jack.h" jack_get_sample_rate ::
   JackClient -> IO NFrames
@@ -256,17 +259,26 @@ jackConnect client from to =
   withCString to $ \cto ->
     jack_connect client cfrom cto
 
-runAudioWithMidi :: Reactive MidiMessage Double -> IO ()
+runAudioWithMidi :: (Int -> Reactive MidiMessage (Vector Double)) -> IO ()
 runAudioWithMidi r0 = do
-  sig <- newMVar r0
   withClient "hsynth" $ \client -> do
     withOutputPort client "out" 0 $ \output -> do
       withMidiInputPort client "midi_in" 0 $ \midiIn -> do
+        bufSize <- jack_get_buffer_size client
+        sig <- newMVar $ r0 (fromIntegral bufSize)
         jackProcess client $ \nframes -> do
           evnts <- getMidiEvents midiIn nframes
           buf <- jack_port_get_buffer output nframes
-          modifyMVar_ sig $ store buf nframes . S.reacting evnts
+          modifyMVar_ sig $ \audio ->
+            let audio' = S.reacting evnts audio
+            in do
+              store buf nframes (S.head audio')
+              return (S.tail audio')
         jackStartup client
+  where
+    store :: Ptr CFloat -> NFrames -> Vector Double -> IO ()
+    store bufOut n vec = V.unsafeWith (V.map double2CFloat vec) $ \bufIn ->
+      copyBytes bufOut bufIn (fromIntegral n)
 
 runAudio :: Audio -> IO ()
 runAudio audio = do
@@ -278,6 +290,16 @@ runAudio audio = do
         modifyMVar_ sig $ store buf nframes
 
       jackStartup client
+
+  where
+    store :: Ptr CFloat -> NFrames -> S.Stream Double -> IO (S.Stream Double)
+    store buf len = go 0
+      where
+        go i s
+          | i >= fromIntegral len = return s
+          | otherwise = do
+            pokeElemOff buf i (double2CFloat (S.head s))
+            go (i+1) (S.tail s)
 
 jackStartup :: JackClient -> IO ()
 jackStartup client = do
@@ -301,12 +323,3 @@ awaitSigint = do
   sig <- newEmptyMVar
   _ <- installHandler keyboardSignal (Catch $ putMVar sig ()) Nothing
   takeMVar sig
-
-store :: Streamable s => Ptr CFloat -> NFrames -> s Double -> IO (s Double)
-store buf len = go 0
-  where
-    go i s
-      | i >= fromIntegral len = return s
-      | otherwise = do
-        pokeElemOff buf i (double2CFloat (S.head s))
-        go (i+1) (S.tail s)

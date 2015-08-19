@@ -15,4 +15,4 @@ main = do
       tuning = equalTemperament twelveTET a440
       signal pitch = 0.1 * sinA (tuning pitch) rate
       sample _ pitch = Sample (signal (fromMidiPitch pitch)) (fadeOut 0.5 rate)
-  Driver.runAudioWithMidi (S.unfoldR VM.roll (VM.interpret sample) VM.empty)
+  Driver.runAudioWithMidi (\chunkSize -> S.unfoldR (VM.roll chunkSize) (VM.interpret sample) VM.empty)

@@ -6,15 +6,16 @@ module Music.VoiceMap
 , mapAccumNotes
 , interpret
 , roll
+, size
 ) where
-
-import           Control.Arrow (second)
 
 import           Data.Maybe (fromMaybe)
 import           Data.IntMap (IntMap)
 import qualified Data.IntMap as M
 import qualified Data.List as L
 import qualified Data.Stream as S
+import qualified Data.Vector.Storable as V
+import           Data.Vector.Storable (Vector)
 
 import           Music.Midi (Pitch,Velocity,MidiMessage(..),ChannelVoiceMessage(..))
 
@@ -48,9 +49,9 @@ noteOff pitch vm = vm
     pitch' = fromIntegral pitch
 {-# INLINE noteOff #-}
 
-{-size :: VoiceMap -> Int-}
-{-size vm = M.size (voices vm) + length (tearDown vm)-}
-{-[># INLINE size #<]-}
+size :: VoiceMap -> Int
+size vm = M.size (voices vm) + length (tearDown vm)
+{-# INLINE size #-}
 
 interpret :: (Velocity -> Pitch -> Sample) -> MidiMessage -> VoiceMap -> VoiceMap
 interpret synth (Voice _ (NoteOn pitch vel)) vm =
@@ -68,9 +69,21 @@ mapAccumNotes f g a0 vm =
   in (a2,vm { voices = voices', tearDown = tearDown' })
 {-# INLINE mapAccumNotes #-}
 
-roll :: VoiceMap -> (Double,VoiceMap)
-roll vm = mapAccumNotes goAudio goTearDown 0 vm
+{-roll :: VoiceMap -> (Double,VoiceMap)-}
+{-roll vm = mapAccumNotes goAudio goTearDown 0 vm-}
+  {-where-}
+    {-goAudio amp (S.Cons x xs) = (amp+x,xs)-}
+    {-goTearDown amp (x:xs) = (amp+x,xs)-}
+    {-goTearDown amp []     = (amp,[])-}
+
+roll :: Int -> VoiceMap -> (Vector Double,VoiceMap)
+roll n = mapAccumNotes mixAudio mixTearDown (V.replicate n 0)
   where
-    goAudio amp (S.Cons x xs) = (amp+x,xs)
-    goTearDown amp (x:xs) = (amp+x,xs)
-    goTearDown amp []     = (amp,[])
+    mixAudio :: Vector Double -> Audio -> (Vector Double, Audio)
+    mixAudio sample audio =
+      let (sample',audio') = S.splitAt n audio
+      in (V.zipWith (+) sample (V.fromList sample'),audio')
+    mixTearDown :: Vector Double -> [Double] -> (Vector Double,[Double])
+    mixTearDown sample audio =
+      let (sample',audio') = L.splitAt n audio
+      in (V.zipWith (+) sample (V.fromList sample'),audio')

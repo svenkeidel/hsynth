@@ -1,4 +1,4 @@
-module Sound.Flute where
+module Flute where
 
 import qualified Data.Stream as S
 
