@@ -17,7 +17,7 @@ import qualified Data.Stream as S
 import qualified Data.Vector.Storable as V
 import           Data.Vector.Storable (Vector)
 
-import           Music.Midi (Pitch,Velocity,MidiMessage(..),ChannelVoiceMessage(..))
+import           Music.MidiMessage (Pitch,Velocity,MidiMessage(..),ChannelVoiceMessage(..))
 
 import           Sound.Sample
 import           Sound.Types

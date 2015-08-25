@@ -25,7 +25,7 @@ import           Foreign.C.String
 
 import           GHC.Float
 
-import           Music.Midi
+import           Music.MidiMessage
 
 import           System.Posix.Signals
 

@@ -1,5 +1,5 @@
 {-# LANGUAGE BinaryLiterals #-}
-module Music.Midi where
+module Music.MidiMessage where
 
 import           Data.Word
 import           Data.Binary.Get (Get,Decoder)

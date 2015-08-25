@@ -1,7 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Music.Pitch where
 
-import qualified Music.Midi as Midi
+import qualified Music.MidiMessage as Midi
 
 type Octave = Int
 

@@ -39,6 +39,7 @@ flag examples
 
 library
   exposed-modules:     Data.Stream,
+                       Data.SMPTE,
 
                        Sound.AllPassFilter,
                        Sound.BiQuadraticFilter,
@@ -69,7 +70,8 @@ library
                        Music.Tempo,
                        Music.Tuning.EqualTemperament,
                        Music.Tuning.Pythagorean,
-                       Music.Midi,
+                       Music.MidiMessage,
+                       Music.MidiFile,
                        Music.VoiceMap
 
   other-modules:       Music.MidiManufacturer
@@ -80,6 +82,7 @@ library
                        cassava,
                        containers,
                        random,
+                       text,
                        vector,
                        unix,
                        template-haskell
