@@ -1,9 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE BinaryLiterals #-}
 module Music.MidiMessage where
 
+import           Control.Monad.State
+
 import           Data.Word
-import           Data.Binary.Get (Get,Decoder)
-import qualified Data.Binary.Get as B
+import           Data.Binary.Get
 import           Data.Bits
 import qualified Data.ByteString.Lazy as BL
 import           Data.ByteString.Lazy.Internal (chunk,ByteString(..))
@@ -46,6 +48,10 @@ data ChannelVoiceMessage
   | PitchBend PitchBend
   deriving (Show,Eq)
 
+data RunningStatus
+  = RunningStatus Channel ChannelVoiceMessage
+  | None
+
 data ChannelModeMessage
   = AllSoundOff
   | ResetAllControllers
@@ -86,63 +92,77 @@ data SystemRealTimeMessage
   deriving (Show,Eq)
 
 getMessages :: ByteString -> [MidiMessage]
-getMessages = go decoder
+getMessages = go (decoder None)
   where
-    decoder = B.runGetIncremental getMessage
+    decoder status = do
+      runGetIncremental (runStateT getMessage status)
 
-    go :: Decoder MidiMessage -> ByteString -> [MidiMessage]
-    go (B.Done leftover _ msg) input =
-      msg : go decoder (chunk leftover input)
-    go (B.Partial k) input
+    go :: Decoder (MidiMessage,RunningStatus) -> ByteString -> [MidiMessage]
+    go (Done leftover _ (msg,status)) input =
+      msg : go (decoder status) (chunk leftover input)
+    go (Partial k) input
       | BL.null input = []
       | otherwise     = go (k . takeHeadChunk $ input) (dropHeadChunk input)
-    go (B.Fail _ _ errMsg) _ = error errMsg
-{-
-instance Show a => Show (Decoder a) where
-  show (B.Done leftover consumed a) = unwords ["Done", show leftover, show consumed, show a]
-  show (B.Partial _) = "Partial _"
-  show (B.Fail leftover consumed msg) = unwords ["Fail", show leftover, show consumed, msg]
--}
+    go (Fail _ _ errMsg) _ = error errMsg
 
-getMessage :: Get MidiMessage
+getMessage :: StateT RunningStatus Get MidiMessage
 getMessage = do
-  (firstHalfWord,lastHalfWord) <- splitHalf
+  (firstHalfWord,lastHalfWord,word) <- lift splitHalf
   let chan = lastHalfWord
+      voiceMsg :: Get ChannelVoiceMessage -> StateT RunningStatus Get MidiMessage
+      voiceMsg getMsg = do
+        msg <- lift getMsg
+        put (RunningStatus chan msg)
+        return $ Voice chan msg
   case firstHalfWord of
-    0b1000 -> Voice chan <$> (NoteOff <$> B.getWord8 <*> B.getWord8)
-    0b1001 -> Voice chan <$> (NoteOn <$> B.getWord8 <*> B.getWord8)
-    0b1010 -> Voice chan <$> (PolyphonicKeyPressure <$> B.getWord8 <*> B.getWord8)
+    0b1000 -> voiceMsg $ NoteOff <$> getWord8 <*> getWord8
+    0b1001 -> voiceMsg $ NoteOn <$> getWord8 <*> getWord8
+    0b1010 -> voiceMsg $ PolyphonicKeyPressure <$> getWord8 <*> getWord8
     0b1011 -> getController chan
-    0b1100 -> Voice chan <$> (ProgramChange <$> B.getWord8)
-    0b1101 -> Voice chan <$> (ChannelPressure <$> B.getWord8)
-    0b1110 -> Voice chan <$> (PitchBend <$> getInt)
+    0b1100 -> voiceMsg $ ProgramChange <$> getWord8
+    0b1101 -> voiceMsg $ ChannelPressure <$> getWord8
+    0b1110 -> voiceMsg $ PitchBend <$> fromIntegral <$> getWord16be
     0b1111 -> getSystemMessage lastHalfWord
-    _      -> parseError $ "unknown midi message: (" ++ show firstHalfWord ++ "," ++ show lastHalfWord ++ ")"
+    _ -> do
+      RunningStatus chan' status <- get
+      Voice chan' <$> case status of
+        (NoteOff _ _)               -> lift $ NoteOff word <$> getWord8
+        (NoteOn _ _)                -> lift $ NoteOn word <$> getWord8
+        (PolyphonicKeyPressure _ _) -> lift $ PolyphonicKeyPressure word <$> getWord8
+        (ProgramChange _)           -> return $ ProgramChange word
+        (ChannelPressure _)         -> return $ ChannelPressure word
+        (PitchBend _)               -> lift $ do
+          msb <- fromIntegral <$> getWord8
+          return $ PitchBend (fromIntegral word + 128 * msb)
+        (ControlChange _ _)         -> lift $ ControlChange word <$> getWord8
 
-getController :: Channel -> Get MidiMessage
+getController :: Channel -> StateT RunningStatus Get MidiMessage
 getController chan = do
-  controller <- B.getWord8
-  value <- B.getWord8
-  return $ case (controller,value) of
-    (120,0)   -> Mode AllSoundOff
-    (121,_)   -> Mode ResetAllControllers
-    (122,0)   -> Mode LocalControlOff
-    (122,127) -> Mode LocalControlOn
-    (123,_)   -> Mode AllSoundOff
-    (124,_)   -> Mode OmniModeOff
-    (125,_)   -> Mode OmniModeOn
-    (126,_)   -> Mode (MonoModeOn (fromIntegral value))
-    (127,_)   -> Mode PolyModeOn
-    _         -> Voice chan $ ControlChange controller value
+  controller <- lift getWord8
+  value <- lift getWord8
+  case (controller,value) of
+    (120,0)   -> return $ Mode AllSoundOff
+    (121,_)   -> return $ Mode ResetAllControllers
+    (122,0)   -> return $ Mode LocalControlOff
+    (122,127) -> return $ Mode LocalControlOn
+    (123,_)   -> return $ Mode AllSoundOff
+    (124,_)   -> return $ Mode OmniModeOff
+    (125,_)   -> return $ Mode OmniModeOn
+    (126,_)   -> return $ Mode (MonoModeOn (fromIntegral value))
+    (127,_)   -> return $ Mode PolyModeOn
+    _         -> do
+      let msg = ControlChange controller value
+      put (RunningStatus chan msg)
+      return $ Voice chan msg
 {-# INLINE getController #-}
 
-getSystemMessage :: Word8 -> Get MidiMessage
+getSystemMessage :: Word8 -> StateT RunningStatus Get MidiMessage
 getSystemMessage lastHalfWord =
   case lastHalfWord of
-    0b0000 -> getSystemExclusiveMessage
-    0b0001 -> getTimeCodeMessage
-    0b0010 -> SystemCommon <$> (SongPosition <$> getInt)
-    0b0011 -> SystemCommon <$> (SongSelect <$> B.getWord8)
+    0b0000 -> resetRunningStatus >> lift getSystemExclusiveMessage
+    0b0001 -> resetRunningStatus >> lift getTimeCodeMessage
+    0b0010 -> resetRunningStatus >> SystemCommon . SongPosition . fromIntegral <$> lift getWord16be
+    0b0011 -> resetRunningStatus >> SystemCommon . SongSelect <$> lift getWord8
     0b0100 -> return $ Reserved
     0b0101 -> return $ Reserved
     0b1000 -> return $ SystemRealTime TimeClock
@@ -153,12 +173,14 @@ getSystemMessage lastHalfWord =
     0b1101 -> return $ Reserved
     0b1110 -> return $ SystemRealTime ActiveSensing
     0b1111 -> return $ SystemRealTime Reset
-    _      -> parseError $ "unknown midi system message: (" ++ show (0b11111 :: Word8) ++ "," ++ show lastHalfWord ++ ")"
+    _      -> lift $ parseError $ "unknown midi system message: (" ++ show (0b11111 :: Word8) ++ "," ++ show lastHalfWord ++ ")"
+  where
+    resetRunningStatus = put None
 {-# INLINE getSystemMessage #-}
 
 getTimeCodeMessage :: Get MidiMessage
 getTimeCodeMessage = do
-  word <- B.getWord8
+  word <- getWord8
   let messageType = shiftR (word .&. 0b01110000) 4
       nibble = word .&. 0b00001111
       timeCode = case messageType of
@@ -192,28 +214,21 @@ takeUntil terminator = go mempty
   where
     go :: Builder -> Get ByteString
     go builder = do
-      word <- B.getWord8
+      word <- getWord8
       if word == terminator
         then return $ BSB.toLazyByteString builder
         else go $ builder <> BSB.word8 word
 {-# INLINE takeUntil #-}
-
-getInt :: Get Int
-getInt = do
-  lsb <- fromIntegral <$> B.getWord8
-  msb <- fromIntegral <$> B.getWord8
-  return $ (lsb + 128 * msb)
-{-# INLINE getInt #-}
 
 parseError :: String -> Get MidiMessage
 parseError = return . ParseError
 {-# INLINE parseError #-}
 
 -- | Splits a word into its first four bits and its last four bits.
-splitHalf :: Get (Word8,Word8)
+splitHalf :: Get (Word8,Word8,Word8)
 splitHalf = do
-  word <- B.getWord8
-  return (shiftR word 4, word .&. 0b00001111)
+  word <- getWord8
+  return (shiftR word 4, word .&. 0b00001111,word)
 {-# INLINE splitHalf #-}
 
 

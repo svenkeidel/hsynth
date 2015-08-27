@@ -42,15 +42,15 @@ spec = describe "the MIDI Protocol" $ do
                 , ([0xFF,0xFF,0xFF,0x7F], 0xFFFFFFF)
                 ]
     forM_ tests $ \(vlq,int) ->
-      runGet variableLengthQuantity (B.pack vlq)
+      runGet getVariableLengthQuantity (B.pack vlq)
         `shouldBe` int
 
   it "can parse the smpte tempo information" $ do
-    runGet tempo (B.pack [-25,40])
+    runGet getTempo (B.pack [-25,40])
       `shouldBe` SMPTE (SMPTEFormat 25 40)
 
   it "can parse system exclusive events" $ do
-    runGet (trackEvents 1)
+    runGet (getTrackEvents 1)
       (B.pack [ 0x64
               , 0xF0, 0x03, 0x43, 0x12, 0x00
               , 0x81, 0x48
@@ -84,10 +84,10 @@ spec = describe "the MIDI Protocol" $ do
          , 0x81, 0x40, 0x82, 0x30, 0x40 -- Ch. 3 note off C3
          , 0x00,       0x82, 0x3C, 0x40 -- Ch. 3 note off C4
          , 0x00,       0x81, 0x43, 0x40 -- Ch. 2 note off G4
-         , 0x00,       0x80, 0x4C, 0x40 -- Ch. 1 note off G4
+         , 0x00,       0x80, 0x4C, 0x40 -- Ch. 1 note off E4
          , 0x00,       0xFF, 0x2F, 0x00 -- end of track
          ]
-    runGet midiFile file
+    runGet getMidiFile file
       `shouldBe`
       MidiFile SingleTrack (TicksPerQuarterNote 96)
         [ Track [ (0,   MetaEvent (TimeSignature (4%4) 24 8))

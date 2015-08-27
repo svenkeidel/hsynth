@@ -3,7 +3,7 @@ module Sound.Driver.Jack where
 
 import           Control.Concurrent.MVar
 import           Control.Exception (finally)
-import           Control.Monad(forM)
+import           Control.Monad.State
 
 import qualified Data.Binary.Get as G
 import           Data.Bits
@@ -249,7 +249,7 @@ getMidiEvents midiPort nframes = do
         then return Nothing
         else do
           bs <- B.unsafePackCStringFinalizer b (fromIntegral s) (return ())
-          let msg = Just $ G.runGet getMessage $ BL.fromStrict bs
+          let msg = Just $ G.runGet (evalStateT getMessage None) $ BL.fromStrict bs
           print msg
           return msg
 

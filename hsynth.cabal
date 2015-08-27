@@ -81,6 +81,7 @@ library
                        bytestring,
                        cassava,
                        containers,
+                       mtl,
                        random,
                        text,
                        vector,

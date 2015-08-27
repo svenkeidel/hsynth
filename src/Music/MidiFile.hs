@@ -4,6 +4,7 @@
 module Music.MidiFile where
 
 import           Control.Monad
+import           Control.Monad.State
 import           Data.Binary.Get
 import           Data.Bits
 import qualified Data.ByteString.Lazy as BL
@@ -65,17 +66,17 @@ type KeySignature = Int
 data Mode = Major | Minor
   deriving (Show,Eq)
 
-midiFile :: Get MidiFile
-midiFile = do
+getMidiFile :: Get MidiFile
+getMidiFile = do
   skip (length "MThd")
   skip 4
-  format <- midiFormat
+  format <- getMidiFormat
   n <- fromIntegral <$> getWord16be
-  t <- tempo
-  MidiFile format t <$> forM [0..n-1] (\i -> label ("parse midi track " ++ show i) $ track i)
+  t <- getTempo
+  MidiFile format t <$> forM [0..n-1] (\i -> label ("parse midi track " ++ show i) $ getTrack i)
 
-midiFormat :: Get MidiFormat
-midiFormat = do
+getMidiFormat :: Get MidiFormat
+getMidiFormat = do
   format <- getWord16be
   return $ case format of
     0 -> SingleTrack
@@ -83,42 +84,44 @@ midiFormat = do
     2 -> MultiSong
     _ -> error "Unrecognized midi format"
 
-tempo :: Get Tempo
-tempo = do
+getTempo :: Get Tempo
+getTempo = do
   division <- getWord16be
   return $ case division .&. 0b1000000000000000 of
     0 -> TicksPerQuarterNote $ fromIntegral division
     _ -> SMPTE $ SMPTEFormat (fromIntegral (negate (fromIntegral (shiftR division 8) :: Int8)))
                              (fromIntegral (division .&. 0b0000000011111111))
 
-track :: Int -> Get Track
-track trackNumber = do
+getTrack :: Int -> Get Track
+getTrack trackNumber = do
   skip (length "MTrk")
   trackLength <- getWord32be
-  Track <$> isolate (fromIntegral trackLength) (trackEvents trackNumber)
+  Track <$> isolate (fromIntegral trackLength) (getTrackEvents trackNumber)
 
-trackEvents :: Int -> Get [(DeltaTime,TrackEvent)]
-trackEvents trackNumber = do
-  empty <- isEmpty
-  if empty
-     then return []
-     else do
-      event <- trackEvent trackNumber
-      events <- trackEvents trackNumber
-      return (event:events)
+getTrackEvents :: Int -> Get [(DeltaTime,TrackEvent)]
+getTrackEvents trackNumber = evalStateT go None
+  where
+    go = do
+      empty <- lift isEmpty
+      if empty
+        then return []
+        else do
+          event  <- getTrackEvent trackNumber
+          events <- go
+          return (event:events)
 
-trackEvent :: Int -> Get (DeltaTime,TrackEvent)
-trackEvent trackNumber = do
-  deltaTime <- variableLengthQuantity
-  eventType <- lookAhead getWord8
+getTrackEvent :: Int -> StateT RunningStatus Get (DeltaTime,TrackEvent)
+getTrackEvent trackNumber = do
+  deltaTime <- lift getVariableLengthQuantity
+  eventType <- lift $ lookAhead getWord8
   (deltaTime,) <$> case eventType of
-    0xFF -> label "meta event" $ skip 1 >> MetaEvent <$> metaEvent trackNumber
-    0xF0 -> label "system exclusive" $ systemExclusiveEvent
-    0xF7 -> label "system exclusive" $ systemExclusiveEvent
-    _    -> label "midi event" $ MidiEvent <$> getMessage
+    0xFF -> lift $ label "meta event" $ skip 1 >> MetaEvent <$> getMetaEvent trackNumber
+    0xF0 -> lift $ label "system exclusive" $ getSystemExclusiveEvent
+    0xF7 -> lift $ label "system exclusive" $ getSystemExclusiveEvent
+    _    -> MidiEvent <$> getMessage
 
-metaEvent :: Int -> Get MetaEvent
-metaEvent trackNumber = do
+getMetaEvent :: Int -> Get MetaEvent
+getMetaEvent trackNumber = do
   b1 <- getWord8
   case b1 of
     0x00 -> label "sequence number" $ do
@@ -160,20 +163,20 @@ metaEvent trackNumber = do
         1 -> Minor
         _ -> error "unrecognized key mode"
     0x7F -> label "sequencer specific" $ do
-      n <- fromIntegral <$> variableLengthQuantity
+      n <- fromIntegral <$> getVariableLengthQuantity
       SequencerSpecific <$> BL.fromStrict <$> getByteString n
     _ -> error "unrecognized meta event"
 
 getText :: Get Text
 getText = do
-  len <- fromIntegral <$> variableLengthQuantity
+  len <- fromIntegral <$> getVariableLengthQuantity
   text <- getByteString len
   return $ decodeUtf8With (\_ _ -> Nothing) text
 
-systemExclusiveEvent :: Get TrackEvent
-systemExclusiveEvent = do
+getSystemExclusiveEvent :: Get TrackEvent
+getSystemExclusiveEvent = do
   typ <- getWord8
-  len <- fromIntegral <$> variableLengthQuantity
+  len <- fromIntegral <$> getVariableLengthQuantity
   case typ of
     0xF0 -> SystemExclusiveStart <$> BL.fromStrict <$> getByteString len
     0xF7 -> do
@@ -184,8 +187,8 @@ systemExclusiveEvent = do
         _    -> return $ SystemExclusiveContinue (dat `BL.snoc` last')
     _ -> error "Unrecognized system exclusive event"
 
-variableLengthQuantity :: Get Word32
-variableLengthQuantity = go 0
+getVariableLengthQuantity :: Get Word32
+getVariableLengthQuantity = go 0
   where
     go acc = do
       w <- getWord8
