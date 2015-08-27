@@ -29,6 +29,22 @@ spec = describe "the MIDI Protocol" $ do
       , Voice 0b1010 (NoteOff 65 0)
       ]
 
+  it "can handle running status bytes" $
+    getMessages (B.pack [ 0x90, 0x30, 0x60
+                        ,       0x31, 0x60
+                        ,       0x32, 0x60
+                        ,       0x30, 0x00
+                        ,       0x31, 0x00
+                        ,       0x32, 0x00
+                        ])
+      `shouldBe` [ Voice 0 (NoteOn 0x30 0x60)
+                 , Voice 0 (NoteOn 0x31 0x60)
+                 , Voice 0 (NoteOn 0x32 0x60)
+                 , Voice 0 (NoteOff 0x30 0x00)
+                 , Voice 0 (NoteOff 0x31 0x00)
+                 , Voice 0 (NoteOff 0x32 0x00)
+                 ]
+
   it "can parse variable length quantities" $ do
     let tests = [ ([0b10000110, 0b11000011, 0b00010111], 106903)
                 , (               [0x00], 0x00)

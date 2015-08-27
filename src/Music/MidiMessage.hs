@@ -116,7 +116,7 @@ getMessage = do
         return $ Voice chan msg
   case firstHalfWord of
     0b1000 -> voiceMsg $ NoteOff <$> getWord8 <*> getWord8
-    0b1001 -> voiceMsg $ NoteOn <$> getWord8 <*> getWord8
+    0b1001 -> voiceMsg $ fixNoteOnOff <$> (NoteOn <$> getWord8 <*> getWord8)
     0b1010 -> voiceMsg $ PolyphonicKeyPressure <$> getWord8 <*> getWord8
     0b1011 -> getController chan
     0b1100 -> voiceMsg $ ProgramChange <$> getWord8
@@ -127,7 +127,7 @@ getMessage = do
       RunningStatus chan' status <- get
       Voice chan' <$> case status of
         (NoteOff _ _)               -> lift $ NoteOff word <$> getWord8
-        (NoteOn _ _)                -> lift $ NoteOn word <$> getWord8
+        (NoteOn _ _)                -> lift $ fixNoteOnOff <$> NoteOn word <$> getWord8
         (PolyphonicKeyPressure _ _) -> lift $ PolyphonicKeyPressure word <$> getWord8
         (ProgramChange _)           -> return $ ProgramChange word
         (ChannelPressure _)         -> return $ ChannelPressure word
@@ -135,6 +135,11 @@ getMessage = do
           msb <- fromIntegral <$> getWord8
           return $ PitchBend (fromIntegral word + 128 * msb)
         (ControlChange _ _)         -> lift $ ControlChange word <$> getWord8
+  where
+    -- NoteOn messages with a velocity of 0 are NoteOff events
+    fixNoteOnOff :: ChannelVoiceMessage -> ChannelVoiceMessage
+    fixNoteOnOff (NoteOn note 0) = NoteOff note 0
+    fixNoteOnOff msg             = msg
 
 getController :: Channel -> StateT RunningStatus Get MidiMessage
 getController chan = do
