@@ -1,65 +1,166 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Language.DSP where
 
-data Expr where
-  Var     :: Int -> Expr
-  Lambda  :: Expr -> Expr
-  App     :: Expr -> Expr -> Expr
+import Prelude hiding ((.),id,init)
+import Control.Category
+import Control.Arrow
+import Control.Monad.State
 
+data Expr a where
+  Var :: Int -> Expr a
+  Const :: Double -> Expr Double
 
--- double = (\f. \x. f (f x))
--- times2 = (\x. x+x)
--- foo = double times2 4
+  Add :: Expr Double -> Expr Double -> Expr Double
+  Mult :: Expr Double -> Expr Double -> Expr Double
+  Sub :: Expr Double -> Expr Double -> Expr Double
+  Div :: Expr Double -> Expr Double -> Expr Double
+  Abs :: Expr Double -> Expr Double
+  Signum :: Expr Double -> Expr Double
 
--- define i32 times2(i32 %x) nounwind {
---   %1 = add i32 %x, %x
---   ret %1
--- }
+  Sin :: Expr Double -> Expr Double
+  Cos :: Expr Double -> Expr Double
 
--- define i32 double(i32 (i32)* %f, i32 %x) nounwind {
---   %1 = call i32 %f(i32 %x)
---   %2 = call i32 %f(i32 %1)
---   ret %2
--- }
+deriving instance (Show (Expr a))
 
+instance Num (Expr Double) where
+  (+) = Add
+  (-) = Sub
+  (*) = Mult
+  abs = Abs
+  signum = Signum
+  fromInteger = Const . fromInteger
 
--- int foo(int a, int b)
--- {
---     int c = integer_parse();
---     auto function = [a, b, c](int x) { return (a + b - c) * x; }
---     return function(10);
--- }
+data SynArrow b c where
+  Arr :: (b -> c) -> SynArrow b c
+  First :: SynArrow b c -> SynArrow (b,d) (c,d)
+  Second :: SynArrow b c -> SynArrow (d,b) (d,c)
+  Compose :: SynArrow b c -> SynArrow c d -> SynArrow b d
+  Init :: b -> SynArrow b b
+  Loop :: SynArrow (b,d) (c,d) -> SynArrow b c
 
--- %Lambda_Arguments = type {
---     i32,        ; 0: a (argument)
---     i32,        ; 1: b (argument)
---     i32         ; 2: c (local)
--- }
+instance Category SynArrow where
+  id = Arr id
+  f . g = Compose g f
 
--- define i32 @lambda(%Lambda_Arguments* %args, i32 %x) nounwind {
---     %1 = getelementptr %Lambda_Arguments* %args, i32 0, i32 0
---     %a = load i32* %1
---     %2 = getelementptr %Lambda_Arguments* %args, i32 0, i32 1
---     %b = load i32* %2
---     %3 = getelementptr %Lambda_Arguments* %args, i32 0, i32 2
---     %c = load i32* %3
---     %4 = add i32 %a, %b
---     %5 = sub i32 %4, %c
---     %6 = mul i32 %5, %x
---     ret i32 %6
--- }
+instance Arrow SynArrow where
+  arr = Arr
+  first = First
+  second = Second
 
--- declare i32 @integer_parse()
+class ArrowInit a where
+  init :: b -> a b b
 
--- define i32 @foo(i32 %a, i32 %b) nounwind {
---     %args = alloca %Lambda_Arguments
---     %1 = getelementptr %Lambda_Arguments* %args, i32 0, i32 0
---     store i32 %a, i32* %1
---     %2 = getelementptr %Lambda_Arguments* %args, i32 0, i32 1
---     store i32 %b, i32* %2
---     %c = call i32 @integer_parse()
---     %3 = getelementptr %Lambda_Arguments* %args, i32 0, i32 2
---     store i32 %c, i32* %3
---     %4 = call i32 @lambda(%Lambda_Arguments* %args, i32 10)
---     ret i32 %4
--- }
+instance ArrowInit SynArrow where
+  init = Init
+
+instance ArrowLoop SynArrow where
+  loop = Loop
+
+class (Arrow a, ArrowInit a, ArrowLoop a) => Signal a
+
+instance Signal SynArrow
+
+pattern LoopB i f = Loop (Compose (Arr f) (Second (Second (Init i))))
+
+optimize :: SynArrow a b -> SynArrow a b
+optimize a0 =
+  case a0 of
+    (Init i) -> LoopB i id
+    (First f) -> single (First (optimize f))
+    (Second f) -> single (Second (optimize f))
+    (Compose f g) -> single (Compose (optimize f) (optimize g))
+    (Loop f) -> single (Loop (optimize f))
+    a -> a
+  where
+    single :: SynArrow b c -> SynArrow b c
+    single b0 =
+        case b0 of
+          Compose (Arr f) (Arr g) -> Arr (f >>> g)
+          Compose (Arr f) (LoopB i g) -> LoopB i (g . first f)
+          Compose (LoopB i f) (Arr g) -> LoopB i (first g . f)
+          --Compose (LoopB i f) (Arr g) -> LoopB i (first g . f)
+          Compose (LoopB i f) (LoopB j g) -> _ --LoopB (i,j) (assoc (juggle (first g) . first f))
+          First (Arr f) -> Arr (first f)
+          Second (Arr f) -> Arr (second f)
+          First (LoopB i f) -> LoopB i (juggle (first f))
+          Second (LoopB i f) -> LoopB i (juggle2 f)
+          Loop f -> LoopB () (arr assoc2 >>> (_ (first f)) >>> arr assoc1)
+          Loop (LoopB i f) -> LoopB i (trace (juggle f))
+          a -> a
+
+    trace f b = let (c, d) = f (b, d) in c
+
+    swap :: (a,b) -> (b,a)
+    swap (x,y) = (y,x)
+
+    assoc f = assoc1 . f . assoc2
+
+    assoc1 :: ((x,y),z) -> (x,(y,z))
+    assoc1 ((x,y),z) = (x,(y,z))
+
+    assoc2 :: (x,(y,z)) -> ((x,y),z)
+    assoc2 (x,(y,z)) = ((x,y),z)
+
+    juggle f = juggle1 . f . juggle1
+
+    juggle1 :: ((x,y),z) -> ((x,z),y)
+    juggle1 ((x,y),z) = ((x,z),y)
+
+    juggle2 :: ((a,c) -> (b,c)) -> ((d,a),c) -> ((d,b),c)
+    juggle2 f ((d,a),c) =
+        let (b',c') = f (a,c)
+        in ((d,b'),c')
+
+unfold :: Signal a => (c -> (b,c)) -> c -> a d b
+unfold f s = loop (arr snd >>> arr f >>> second (init s))
+
+type Frequency = Double
+type Rate = Int
+
+sinA :: Signal a => Frequency -> Rate -> a d (Expr Double)
+sinA freq rate =
+  let omh  = 2 * pi * freq / fromIntegral rate
+      i    = sin omh
+      c    = 2 * cos omh
+  in unfold (\(y1,y2) -> let y = Const c * y1 - y2 in (y2,(y,y1))) (Const i,0)
+
+type Gen a = State Int a
+
+fresh :: Gen Int
+fresh = do
+  modify (+1)
+  get
+
+class GenExpr e where
+  gen :: Gen e
+
+instance GenExpr (Expr a) where
+  gen = Var <$> fresh
+
+instance (GenExpr a, GenExpr b) => GenExpr (a,b) where
+  gen = do
+    a <- gen
+    b <- gen
+    return (a,b)
+
+-- data Compiled a b where
+--   Pure :: (a -> b) -> Compiled a b
+--   Stateful :: ((a,c) -> (b,c)) -> c -> Compiled a b
+--   Fail :: Compiled a b
+
+-- instance Show (Compiled a b) where
+--   show (Pure {}) = "Pure"
+--   show (Stateful {}) = "Stateful"
+--   show Fail = "Fail"
+
+-- compile :: SynArrow a b -> Compiled a b
+-- compile a = case optimize a of
+--   Arr f -> Pure f
+--   LoopB i f -> Stateful f i
+--   _ -> Fail
