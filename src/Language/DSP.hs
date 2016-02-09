@@ -88,9 +88,9 @@ class Category a => Optimizable a where
   (><) :: a b c -> a b' c' -> a (b,b') (c,c')
 
 instance Optimizable (->) where
-  swap = arr $ \(x,y) -> (y,x)
-  assoc1 = arr $ \((x,y),z) -> (x,(y,z))
-  assoc2 = arr $ \(x,(y,z)) -> ((x,y),z)
+  swap (x,y) = (y,x)
+  assoc1 ((x,y),z) = (x,(y,z))
+  assoc2 (x,(y,z)) = ((x,y),z)
   (><) = (***)
 
 data Expr a where
