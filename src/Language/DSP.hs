@@ -10,6 +10,8 @@ module Language.DSP where
 import Prelude hiding ((.),id,init)
 import Control.Category
 import Control.Arrow
+import Language.Optimizable
+import Language.Signal
 
 -- | The AST of arrow syntax
 data SynArrow a b c where
@@ -29,16 +31,11 @@ instance Arrow a => Arrow (SynArrow a) where
   first = First
   second = Second
 
-class ArrowInit a where
-  init :: b -> a b b
-
 instance ArrowInit (SynArrow a) where
   init = Init
 
 instance Arrow a => ArrowLoop (SynArrow a) where
   loop = Loop
-
-class (Arrow a, ArrowInit a, ArrowLoop a) => Signal a
 
 instance Arrow a => Signal (SynArrow a)
 
@@ -80,52 +77,3 @@ optimize a0 =
 
     shuffle2 :: Optimizable a => a ((b,(c,d)),(e,f)) (b,((c,e),(d,f)))
     shuffle2 = (id >< transpose) <<< assoc1
-
-class Category a => Optimizable a where
-  swap :: a (b,c) (c,b)
-  assoc1 :: a ((x,y),z) (x,(y,z))
-  assoc2 :: a (x,(y,z)) ((x,y),z)
-  (><) :: a b c -> a b' c' -> a (b,b') (c,c')
-
-instance Optimizable (->) where
-  swap (x,y) = (y,x)
-  assoc1 ((x,y),z) = (x,(y,z))
-  assoc2 (x,(y,z)) = ((x,y),z)
-  (><) = (***)
-
-data Expr a where
-  Var :: Int -> Expr a
-  Const :: Double -> Expr Double
-
-  Add :: Expr Double -> Expr Double -> Expr Double
-  Mult :: Expr Double -> Expr Double -> Expr Double
-  Sub :: Expr Double -> Expr Double -> Expr Double
-  Div :: Expr Double -> Expr Double -> Expr Double
-  Abs :: Expr Double -> Expr Double
-  Signum :: Expr Double -> Expr Double
-
-  Sin :: Expr Double -> Expr Double
-  Cos :: Expr Double -> Expr Double
-
-deriving instance (Show (Expr a))
-
-instance Num (Expr Double) where
-  (+) = Add
-  (-) = Sub
-  (*) = Mult
-  abs = Abs
-  signum = Signum
-  fromInteger = Const . fromInteger
-
-unfold :: Signal a => (c -> (b,c)) -> c -> a d b
-unfold f s = loop (arr snd >>> arr f >>> second (init s))
-
-type Frequency = Double
-type Rate = Int
-
-sinA :: Signal a => Frequency -> Rate -> a d (Expr Double)
-sinA freq rate =
-  let omh  = 2 * pi * freq / fromIntegral rate
-      i    = sin omh
-      c    = 2 * cos omh
-  in unfold (\(y1,y2) -> let y = Const c * y1 - y2 in (y2,(y,y1))) (Const i,0)
