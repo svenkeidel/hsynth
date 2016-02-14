@@ -1,8 +1,10 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FunctionalDependencies #-}
 module Language.Signal where
 
 import Control.Arrow
 
-class ArrowInit a where
-  init :: b -> a b b
+class ArrowInit i a | a -> i where
+  init :: i b -> a b b
 
-class (Arrow a, ArrowInit a, ArrowLoop a) => Signal a
+class (Arrow a, ArrowInit i a, ArrowLoop a) => Signal i a | a -> i
