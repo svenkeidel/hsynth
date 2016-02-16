@@ -18,8 +18,7 @@ data SynArrow i a b c where
   First :: SynArrow i a b c -> SynArrow i a (b,d) (c,d)
   Compose :: SynArrow i a b c -> SynArrow i a c d -> SynArrow i a b d
   Init :: i b -> SynArrow i a b b
-  Loop :: SynArrow i a (b,d) (c,d) -> SynArrow i a b c
-  LoopB :: i d -> SynArrow i a (b,(c,d)) (e,(c,d)) -> SynArrow i a b e
+  LoopD :: i d -> SynArrow i a (b,d) (c,d) -> SynArrow i a b c
 
 second :: Optimizable a => SynArrow i a b c -> SynArrow i a (d,b) (d,c)
 second f = Arr swap >>> First f >>> Arr swap
@@ -36,11 +35,8 @@ instance Show (SynArrow i a b c) where
                  . showsPrec (d+1) g
     (Init _) -> showParen (d > app_prec)
               $  showString "init _"
-    (Loop f) -> showParen (d > app_prec)
-              $ showString "loop "
-              . showsPrec (app_prec+1) f
-    (LoopB _ f) -> showParen (d > app_prec)
-                 $ showString "loopB _ "
+    (LoopD i f) -> showParen (d > app_prec)
+                 $ showString "loopD _ "
                  . showsPrec (app_prec+1) f
     where app_prec = 10
           compose_prec = 1
@@ -56,10 +52,10 @@ instance Arrow a => Arrow (SynArrow i a) where
 instance ArrowInit i (SynArrow i a) where
   init = Init
 
-instance Arrow a => ArrowLoop (SynArrow i a) where
-  loop = Loop
+-- instance Arrow a => ArrowLoop (SynArrow i a) where
+--   loop = Loop
 
-instance Arrow a => Signal i (SynArrow i a)
+-- instance Arrow a => Signal i (SynArrow i a)
 
 class Category a => Optimizable a where
   swap :: a (b,c) (c,b)
@@ -81,25 +77,33 @@ optimize :: (Optimizable a, Product i) => SynArrow i a b c -> SynArrow i a b c
 optimize a0 =
   case a0 of
     normal@(Arr _) -> normal
-    normal@(LoopB _ (Arr _)) -> normal
-    (Init i) -> optimize $ single (Init i)
-    (First f) -> optimize $ single (First (optimize f))
-    (Compose f g) -> optimize $ single (Compose (optimize f) (optimize g))
-    (Loop f) -> optimize $ single (Loop (optimize f))
-    (LoopB i f) -> optimize $ single (LoopB i (optimize f))
+    normal@(LoopD _ (Arr _)) -> normal
+    (Init i) -> LoopD i (Arr swap)
+    (First f) -> single (First (optimize f))
+    (Compose f g) -> single (Compose (optimize f) (optimize g))
+--    (Loop f) -> optimize $ single (Loop (optimize f))
+    (LoopD i f) -> single (LoopD i (optimize f))
   where
     single :: (Optimizable a, Product i) => SynArrow i a b c -> SynArrow i a b c
     single b0 =
         case b0 of
-          Loop f -> LoopB unit (Arr assoc2 >>> First f >>> Arr assoc1)
-          Init i -> LoopB i (Arr swap <<< Arr juggle <<< Arr swap)
           Compose (Arr f) (Arr g) -> Arr (f >>> g)
+          Compose (Arr f) (LoopD i g) -> LoopD i (Arr (f >< id) >>> g)
+          Compose (LoopD i f) (Arr g) -> LoopD i (f >>> Arr (g >< id))
+          Compose (LoopD i f) (LoopD j g) ->
+            LoopD (inj i j) $ assoc' (juggle' (First g) . First f)
           First (Arr f) -> Arr (f >< id)
-          Compose h (LoopB i f) -> LoopB i (First h >>> f)
-          Compose (LoopB i f) (Arr  g) -> LoopB i (f >>> First (Arr g))
-          LoopB i (LoopB j f) -> LoopB (inj i j) (Arr shuffle1 >>> f >>> Arr shuffle2)
-          First (LoopB i f) -> LoopB i (Arr juggle >>> First f >>> Arr juggle)
+          LoopD i (LoopD j f) -> LoopD (inj i j)_
+          -- Loop f -> LoopB unit (Arr assoc2 >>> First f >>> Arr assoc1)
+          -- Init i -> LoopB i (Arr swap <<< Arr juggle <<< Arr swap)
+
+          -- Compose h (LoopB i f) -> LoopB i (First h >>> f)
+          -- Compose (LoopB i f) (Arr  g) -> LoopB i (f >>> First (Arr g))
+          -- LoopB i (LoopB j f) -> LoopB (inj i j) (Arr shuffle1 >>> f >>> Arr shuffle2)
           a -> a
+
+    assoc' f = Arr assoc2 >>> f >>> Arr assoc1
+    juggle' f = Arr juggle >>> f >>> Arr juggle
 
     juggle :: Optimizable a => a ((b,c),d) ((b,d),c)
     juggle = assoc2 <<< (id >< swap) <<< assoc1
