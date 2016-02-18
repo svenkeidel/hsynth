@@ -8,7 +8,7 @@ import           Control.Category
 import           Data.Sequence (Seq)
 
 unfold :: Function c (b,c) -> Prod c -> SynArrow Prod Function d b
-unfold f s = Loop (Arr (Function Proj2) >>> Arr f >>> second (Init s))
+unfold f s = LoopD s (Arr (Function Proj2) >>> Arr f)
 
 type Frequency = Double
 type Rate = Int
@@ -28,7 +28,7 @@ example = Arr $
 optimize' :: SynArrow Prod Function b c -> (Untyped.Prod,Seq CodeGen.Assignment)
 optimize' a = case optimize a of
   (Arr (Function f)) -> (Untyped.Unit, CodeGen.assignments (f Var))
-  (LoopB i (Arr (Function f))) -> (Untyped.lowerProduct i, CodeGen.assignments (f Var))
+  (LoopD i (Arr (Function f))) -> (Untyped.lowerProduct i, CodeGen.assignments (f Var))
   _ -> error "Optimize didn't normalize to normal form"
 
-test = optimize (sinA 440 48000)
+test = optimize' (sinA 440 48000)

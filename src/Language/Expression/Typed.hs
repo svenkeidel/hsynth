@@ -7,12 +7,13 @@ import Prelude hiding ((.),id)
 
 import Control.Category
 import Language.SynArrow
+import Data.Typeable
 
 data Expr a where
   Var :: Expr a
   Const :: Double -> Expr Double
 
-  Fun :: Fun a -> Expr a
+  Fun :: Fun (a -> b) -> Expr (a -> b)
   App :: Expr (a -> b) -> Expr a -> Expr b
 
   Inj :: Expr a -> Expr b -> Expr (a,b)
@@ -20,6 +21,7 @@ data Expr a where
   Proj2 :: Expr (a,b) -> Expr b
 
 deriving instance (Show (Expr a))
+deriving instance (Typeable (Expr a))
 
 data Fun a where
   Add :: Fun (Double -> Double -> Double)

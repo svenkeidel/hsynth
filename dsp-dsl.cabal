@@ -19,9 +19,11 @@ library
   exposed-modules:     Language.Expression.Typed,
                        Language.SynArrow,
                        Language.Example
-  -- other-extensions:    
+  -- other-extensions:
   build-depends:       base >=4 && <5,
                        mtl,
-                       containers
+                       containers,
+                       llvm-general,
+                       llvm-general-pure
   hs-source-dirs:      src
   default-language:    Haskell2010

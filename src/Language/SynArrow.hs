@@ -93,7 +93,7 @@ optimize a0 =
           Compose (LoopD i f) (LoopD j g) ->
             LoopD (inj i j) $ assoc' (juggle' (First g) . First f)
           First (Arr f) -> Arr (f >< id)
-          LoopD i (LoopD j f) -> LoopD (inj i j)_
+          LoopD i (LoopD j f) -> LoopD (inj i j) (Arr assoc2 >>> f >>> Arr assoc1)
           -- Loop f -> LoopB unit (Arr assoc2 >>> First f >>> Arr assoc1)
           -- Init i -> LoopB i (Arr swap <<< Arr juggle <<< Arr swap)
 
@@ -108,11 +108,11 @@ optimize a0 =
     juggle :: Optimizable a => a ((b,c),d) ((b,d),c)
     juggle = assoc2 <<< (id >< swap) <<< assoc1
 
-    transpose :: Optimizable a => a ((b,c),(d,e)) ((b,d),(c,e))
-    transpose = assoc1 <<< (juggle >< id) <<< assoc2
+--    transpose :: Optimizable a => a ((b,c),(d,e)) ((b,d),(c,e))
+--    transpose = assoc1 <<< (juggle >< id) <<< assoc2
 
-    shuffle1 :: Optimizable a => a (b,((c,d),(e,f)))((b,(c,e)),(d,f))
-    shuffle1 = assoc2 <<< (id >< transpose)
+--    shuffle1 :: Optimizable a => a (b,((c,d),(e,f)))((b,(c,e)),(d,f))
+--    shuffle1 = assoc2 <<< (id >< transpose)
 
-    shuffle2 :: Optimizable a => a ((b,(c,d)),(e,f)) (b,((c,e),(d,f)))
-    shuffle2 = (id >< transpose) <<< assoc1
+--    shuffle2 :: Optimizable a => a ((b,(c,d)),(e,f)) (b,((c,e),(d,f)))
+--    shuffle2 = (id >< transpose) <<< assoc1
