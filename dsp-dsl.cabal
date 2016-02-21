@@ -16,14 +16,20 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Language.Expression.Typed,
+  exposed-modules:     Language.Expression,
+                       Language.SimpleExpression,
+                       Language.Product,
+                       Language.Function,
                        Language.SynArrow,
-                       Language.Example
-  -- other-extensions:
+                       Language.Example,
+                       Language.CodeGen.LLVM,
+                       Language.CodeGen.TH,
+                       Language.Compile
   build-depends:       base >=4 && <5,
                        mtl,
                        containers,
                        llvm-general,
-                       llvm-general-pure
+                       llvm-general-pure,
+                       template-haskell
   hs-source-dirs:      src
   default-language:    Haskell2010

@@ -1,13 +1,15 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Language.Expression.Typed where
+{-# LANGUAGE PatternSynonyms #-}
+module Language.Expression where
 
 import Prelude hiding ((.),id)
 
 import Control.Category
+
+import Language.Function
 import Language.SynArrow
-import Data.Typeable
 
 data Expr a where
   Var :: Expr a
@@ -21,28 +23,9 @@ data Expr a where
   Proj2 :: Expr (a,b) -> Expr b
 
 deriving instance (Show (Expr a))
-deriving instance (Typeable (Expr a))
 
-data Fun a where
-  Add :: Fun (Double -> Double -> Double)
-  Mult :: Fun (Double -> Double -> Double)
-  Sub :: Fun (Double -> Double -> Double)
-  Div :: Fun (Double -> Double -> Double)
-  Abs :: Fun (Double -> Double)
-  Signum :: Fun (Double -> Double)
-  Sin :: Fun (Double -> Double)
-  Cos :: Fun (Double -> Double)
-
-deriving instance Show (Fun a)
-
-data Prod a where
-  Prod :: Prod a -> Prod b -> Prod (a,b)
-  Unit :: Prod ()
-  Constant :: Double -> Prod Double
-
-instance Product Prod where
-  unit = Unit
-  inj = Prod
+pattern Fun1 f e1 = App (Fun f) e1
+pattern Fun2 f e1 e2 = App (App (Fun f) e1) e2
 
 optimizeExpr :: Expr a -> Expr a
 optimizeExpr e = case e of
