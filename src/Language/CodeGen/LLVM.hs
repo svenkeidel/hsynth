@@ -52,6 +52,15 @@ deriving instance Show Assignment
 
 type Assignments = Seq Assignment
 
+compile :: SynArrow SimpleExpr Function b Double -> Module
+compile f = case optimize f of
+  LoopD i (Arr (Function g)) -> modul "test" $ assignments (inj (S.Const 0) i) $ g E.Var
+
+compile' :: SynArrow SimpleExpr Function b Double -> IO (Either String String)
+compile' s = L.withContext $ \ctx ->
+             runExceptT $ L.withModuleFromAST ctx (compile s) $ \m ->
+                 L.moduleLLVMAssembly m
+
 modul :: String -> Assignments -> Module
 modul n ass = L.defaultModule
   { L.moduleName = n

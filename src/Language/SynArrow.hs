@@ -10,7 +10,6 @@ module Language.SynArrow where
 import Prelude hiding ((.),id,init)
 import Control.Category
 import Control.Arrow hiding (second)
-import Language.Product
 
 -- | The AST of arrow syntax
 data SynArrow i a b c where
@@ -18,7 +17,8 @@ data SynArrow i a b c where
   First :: SynArrow i a b c -> SynArrow i a (b,d) (c,d)
   Compose :: SynArrow i a b c -> SynArrow i a c d -> SynArrow i a b d
   Init :: i b -> SynArrow i a b b
-  LoopD :: i d -> SynArrow i a (b,d) (c,d) -> SynArrow i a b c
+  Loop :: SynArrow i a (b,d) (c,d) -> SynArrow i a b c
+  LoopD :: i d -> a (b,d) (c,d) -> SynArrow i a b c
 
 second :: Optimizable a => SynArrow i a b c -> SynArrow i a (d,b) (d,c)
 second f = Arr swap >>> First f >>> Arr swap
@@ -35,8 +35,10 @@ instance Show (SynArrow i a b c) where
                  . showsPrec (d+1) g
     (Init _) -> showParen (d > app_prec)
               $  showString "init _"
-    (LoopD i f) -> showParen (d > app_prec)
-                 $ showString "loopD _ "
+    (LoopD _ _) -> showParen (d > app_prec)
+                 $ showString "loopD _ _"
+    (Loop f) -> showParen (d > app_prec)
+                 $ showString "loop "
                  . showsPrec (app_prec+1) f
     where app_prec = 10
           compose_prec = 1
@@ -54,37 +56,45 @@ class Category a => Optimizable a where
   assoc1 :: a ((x,y),z) (x,(y,z))
   assoc2 :: a (x,(y,z)) ((x,y),z)
   (><) :: a b c -> a b' c' -> a (b,b') (c,c')
+--  trace :: a (b,d) (c,d) -> a b c
 
 instance Optimizable (->) where
   swap (x,y) = (y,x)
   assoc1 ((x,y),z) = (x,(y,z))
   assoc2 (x,(y,z)) = ((x,y),z)
   (><) = (***)
+--  trace f a = let (b,d) = f (a,d) in b
+
+class Product m where
+  unit :: m ()
+  inj :: m a -> m b -> m (a,b)
+  fix :: m a
 
 optimize :: (Optimizable a, Product i) => SynArrow i a b c -> SynArrow i a b c
 optimize a0 =
   case a0 of
     normal@(Arr _) -> normal
-    normal@(LoopD _ (Arr _)) -> normal
-    (Init i) -> LoopD i (Arr swap)
+    normal@(LoopD _ _) -> normal
+    (Init i) -> LoopD i swap
     (First f) -> single (First (optimize f))
     (Compose f g) -> single (Compose (optimize f) (optimize g))
-    (LoopD i f) -> single (LoopD i (optimize f))
+    (Loop f) -> single (Loop (optimize f))
   where
     single :: (Optimizable a, Product i) => SynArrow i a b c -> SynArrow i a b c
     single b0 =
         case b0 of
           Compose (Arr f) (Arr g) -> Arr (f >>> g)
-          Compose (Arr f) (LoopD i g) -> LoopD i (Arr (f >< id) >>> g)
-          Compose (LoopD i f) (Arr g) -> LoopD i (f >>> Arr (g >< id))
+          Compose (Arr f) (LoopD i g) -> LoopD i ((f >< id) >>> g)
+          Compose (LoopD i f) (Arr g) -> LoopD i (f >>> (g >< id))
           Compose (LoopD i f) (LoopD j g) ->
-            LoopD (inj i j) $ assoc' (juggle' (First g) . First f)
+            LoopD (inj i j) $ assoc' (juggle' (g >< id) . (f >< id))
           First (Arr f) -> Arr (f >< id)
-          LoopD i (LoopD j f) -> LoopD (inj i j) (Arr assoc2 >>> f >>> Arr assoc1)
+          Loop (Arr f) -> LoopD fix f
+          Loop (LoopD i f) -> LoopD (inj fix i) (assoc' f)
           a -> a
 
-    assoc' f = Arr assoc2 >>> f >>> Arr assoc1
-    juggle' f = Arr juggle >>> f >>> Arr juggle
+    assoc' f = assoc2 >>> f >>> assoc1
+    juggle' f = juggle >>> f >>> juggle
 
     juggle :: Optimizable a => a ((b,c),d) ((b,d),c)
     juggle = assoc2 <<< (id >< swap) <<< assoc1
