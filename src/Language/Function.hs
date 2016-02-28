@@ -3,14 +3,13 @@
 module Language.Function where
 
 data Fun a where
-  Add :: Fun (Double -> Double -> Double)
-  Mult :: Fun (Double -> Double -> Double)
-  Sub :: Fun (Double -> Double -> Double)
-  Div :: Fun (Double -> Double -> Double)
-  Abs :: Fun (Double -> Double)
-  Signum :: Fun (Double -> Double)
+  Add :: Num a => Fun (a -> a -> a)
+  Mult :: Num a => Fun (a -> a -> a)
+  Sub :: Num a => Fun (a -> a -> a)
+  Div :: Fractional a => Fun (a -> a -> a)
+  Abs :: Num a => Fun (a -> a)
+  Signum :: Num a => Fun (a -> a)
   Sin :: Fun (Double -> Double)
   Cos :: Fun (Double -> Double)
 
 deriving instance Show (Fun a)
-

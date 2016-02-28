@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let env = pkgs.haskellPackages.ghcWithPackages(p: with p; [
-    Cabal cabal-install hlint mtl llvm-general llvm-general-pure
+    Cabal cabal-install hlint mtl #llvm-general llvm-general-pure
   ]);
 in pkgs.stdenv.mkDerivation {
   name = "dsp-dsl";

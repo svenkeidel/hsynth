@@ -20,8 +20,8 @@ data SynArrow i a b c where
   Loop :: SynArrow i a (b,d) (c,d) -> SynArrow i a b c
   LoopD :: i d -> a (b,d) (c,d) -> SynArrow i a b c
 
-second :: Optimizable a => SynArrow i a b c -> SynArrow i a (d,b) (d,c)
-second f = Arr swap >>> First f >>> Arr swap
+--second :: Optimizable a => SynArrow i a b c -> SynArrow i a (d,b) (d,c)
+--second f = Arr swap >>> First f >>> Arr swap
 
 instance Show (SynArrow i a b c) where
   showsPrec d e = case e of
@@ -51,26 +51,26 @@ instance Arrow a => Arrow (SynArrow i a) where
   arr = Arr . arr
   first = First
 
-class Category a => Optimizable a where
+class Category a => SemiArrow a where
   swap :: a (b,c) (c,b)
   assoc1 :: a ((x,y),z) (x,(y,z))
   assoc2 :: a (x,(y,z)) ((x,y),z)
   (><) :: a b c -> a b' c' -> a (b,b') (c,c')
---  trace :: a (b,d) (c,d) -> a b c
+  dup :: a b (b,b)
 
-instance Optimizable (->) where
+instance SemiArrow (->) where
   swap (x,y) = (y,x)
   assoc1 ((x,y),z) = (x,(y,z))
   assoc2 (x,(y,z)) = ((x,y),z)
   (><) = (***)
---  trace f a = let (b,d) = f (a,d) in b
+  dup a = (a,a)
 
 class Product m where
   unit :: m ()
   inj :: m a -> m b -> m (a,b)
   fix :: m a
 
-optimize :: (Optimizable a, Product i) => SynArrow i a b c -> SynArrow i a b c
+optimize :: (SemiArrow a, Product i) => SynArrow i a b c -> SynArrow i a b c
 optimize a0 =
   case a0 of
     normal@(Arr _) -> normal
@@ -80,7 +80,7 @@ optimize a0 =
     (Compose f g) -> single (Compose (optimize f) (optimize g))
     (Loop f) -> single (Loop (optimize f))
   where
-    single :: (Optimizable a, Product i) => SynArrow i a b c -> SynArrow i a b c
+    single :: (SemiArrow a, Product i) => SynArrow i a b c -> SynArrow i a b c
     single b0 =
         case b0 of
           Compose (Arr f) (Arr g) -> Arr (f >>> g)
@@ -96,5 +96,5 @@ optimize a0 =
     assoc' f = assoc2 >>> f >>> assoc1
     juggle' f = juggle >>> f >>> juggle
 
-    juggle :: Optimizable a => a ((b,c),d) ((b,d),c)
+    juggle :: SemiArrow a => a ((b,c),d) ((b,d),c)
     juggle = assoc2 <<< (id >< swap) <<< assoc1
