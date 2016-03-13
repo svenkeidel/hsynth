@@ -4,23 +4,40 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Language.CodeGen.TH where
 
-import Prelude hiding (fst,snd)
+import           Prelude hiding (fst,snd)
 
-import Language.Haskell.TH.Syntax
-import Language.Expression
-import Language.Function
-import Language.SynArrow
-import Language.SimpleExpression (SimpleExpr,CompressedSimpleExpr(..),Decide(..),merge)
+import           Data.Sequence (Seq)
+import qualified Data.Sequence as S
+import           Data.Map (Map)
+
+import           Language.Haskell.TH.Syntax hiding (lookupName)
+import           Language.Haskell.TH.Ppr
+import           Language.Expression
+import           Language.Function
+import           Language.SynArrow
+import           Language.SimpleExpression (SimpleExpr,CompressedSimpleExpr(..),Decide(..),merge)
 import qualified Language.SimpleExpression as Simple
-import Unsafe.Coerce
+import           Language.GroundExpr (GroundExpr,Floor,Two(..))
+import qualified Language.GroundExpr as G
 
-compile :: SynArrow SimpleExpr (Function f) a b -> Q Exp
+compile :: SynArrow SimpleExpr Function a b -> Q Exp
 compile f = case optimize f of
-  LoopD i g -> [| ($(reifySimpleExpr i) , $(reifyFunction i (coerceFun g))) |]
+  LoopD i g -> [| ($(reifySimpleExpr i) , $(reifyFunction i g)) |]
   --Arr g -> unTypeQ [|| $$(reifyExpr g) ||]
-  _ -> fail "optimize did not produce normal form"
+  g -> fail $ "optimize did not produce normal form: " ++ show g
+
+abstractSyntax :: SynArrow SimpleExpr Function a b -> IO ()
+abstractSyntax f = case optimize f of
+  LoopD _ (Function g) -> print (optimizeExpr (g Var))
+  g -> error $ "optimize did not produce normal form: " ++ show g
+
+prettyPrint :: Q Exp -> IO ()
+prettyPrint expr = do
+  e <- runQ expr
+  putStrLn $ pprint e
 
 reifySimpleExpr :: SimpleExpr a -> Q Exp
 reifySimpleExpr expr = case Simple.compressSimpleExpr expr of
@@ -30,7 +47,9 @@ reifySimpleExpr expr = case Simple.compressSimpleExpr expr of
 reifyCompressedSimpleExp :: CompressedSimpleExpr a -> Q Exp
 reifyCompressedSimpleExp expr = case expr of
   CInj e1 e2 -> [| ($(reifyCompressedSimpleExp e1),$(reifyCompressedSimpleExp e2) ) |]
-  CConst c -> [| c |]
+  CDouble d -> [| d |]
+  CBool b -> [| b |]
+  CUnit -> [| () |]
 
 data Pattern a where
   Tuple :: Pattern a -> Pattern b -> Pattern (a,b)
@@ -40,6 +59,7 @@ deriving instance (Show (Pattern a))
 data CompressedPattern a where
   CTuple :: CompressedPattern a -> CompressedPattern b -> CompressedPattern (a,b)
   CVariable :: Name -> Name -> CompressedPattern a
+deriving instance (Show (CompressedPattern a))
 
 compressPattern :: Pattern a -> Decide CompressedPattern
 compressPattern pat = case pat of
@@ -68,67 +88,54 @@ letPattern pat = case pat of
   Tuple p1 p2 -> TupP $ [letPattern p1, letPattern p2]
   Variable _ n -> VarP n
 
-outputExpr :: CompressedPattern a -> Exp
+outputExpr :: Pattern a -> Exp
 outputExpr pat = case pat of
-  CTuple p1 p2 -> TupE [outputExpr p1, outputExpr p2]
-  CVariable _ n -> VarE n
+  Tuple p1 p2 -> TupE [outputExpr p1, outputExpr p2]
+  Variable _ n -> VarE n
 
-reifyFunction :: SimpleExpr c -> Function (a,c) (a,c) (b,c) -> Q Exp
+reifyFunction :: forall a b c. SimpleExpr c -> Function (a,c) (b,c) -> Q Exp
 reifyFunction e (Function f) = do
   pat <- reifyPattern e
   a <- newName "x"
   b <- newName "x"
-  let pat' = (Tuple (Variable (Just a) b) pat)
-  Yes cpat <- return $ compressPattern pat'
-  f' <- reifyExpr pat' $ optimizeExpr (f Var)
-
-  return $ LamE [inputPattern cpat]
+  let pat' = Tuple (Variable (Just a) b) pat :: Pattern (a,c)
+  Yes inpat <- return $ compressPattern pat'
+  f' <- reifyFloor pat' $ G.floor $ f Var
+  return $ LamE [inputPattern inpat]
          $ LetE [ValD (letPattern pat')
                       (NormalB (unType f')) []
-                ] (outputExpr cpat)
+                ] (outputExpr pat')
 
-reifyExpr :: Pattern a -> Expr a b -> Q (TExp b)
-reifyExpr = go
+type Names = Map (Seq Two) Name
+
+reifyFloor :: Pattern a -> Floor b -> Q (TExp b)
+reifyFloor pat flr = case flr of
+  G.Inj f1 f2 -> [|| ( $$(reifyFloor pat f1), $$(reifyFloor pat f2) ) ||]
+  G.Floor _ e -> reifyExpr pat e
+
+lookupName :: Pattern a -> Seq Two -> Name
+lookupName pat name = case (pat,S.viewl name) of
+                   (Tuple l _, One S.:< rest) -> lookupName l rest
+                   (Tuple _ r, Two S.:< rest) -> lookupName r rest
+                   (Variable Nothing n, _) -> n
+                   (Variable (Just n) _, _) -> n
+                   (Tuple{}, S.EmptyL) -> error (show pat)
+
+reifyExpr :: Pattern a -> GroundExpr b -> Q (TExp b)
+reifyExpr pat = go
   where
-    go :: Pattern a -> Expr a b -> Q (TExp b)
-    go pat expr = case expr of
-        Var -> variableName pat expr
-        Proj1 _ -> variableName pat expr
-        Proj2 _ -> variableName pat expr
-        Inj e1 e2 -> [|| ($$(go pat e1), $$(go pat e2)) ||]
-        Const c -> [|| c ||]
-        Fun Add -> [|| (+) ||]
-        Fun Sub -> [|| (-) ||]
-        Fun Mult -> [|| (*) ||]
-        Fun Div -> [|| (/) ||]
-        Fun Abs -> [|| abs ||]
-        Fun Signum -> [|| signum ||]
-        Fun Sin -> [|| sin ||]
-        Fun Cos -> [|| cos ||]
-        App e1 e2 -> [|| $$(go pat e1) $$(go pat e2) ||]
-        --_ -> failOnWrongPattern
-
-variableName :: Pattern a -> Expr a b -> Q (TExp b)
-variableName pat0 expr0 = case go pat0 expr0 of
-  (Variable Nothing n) -> unsafeTExpCoerce (return (VarE n))
-  (Variable (Just n) _) -> unsafeTExpCoerce (return (VarE n))
-  where
-
-    go :: Pattern a -> Expr a b -> Pattern b
-    go pat expr = case expr of
-      Proj1 e1 -> fst (go pat e1)
-      Proj2 e2 -> snd (go pat e2)
-      -- This case would typecheck with dependent pattern matching,
-      -- since (Var :: Expr a a)
-      Var -> unsafeCoerce pat
-
-    fst :: Pattern (a,b) -> Pattern a
-    fst pat = case pat of
-      Tuple p1 _ -> p1
-      Variable n1 n2 -> Variable n1 n2
-
-
-    snd :: Pattern (a,b) -> Pattern b
-    snd pat = case pat of
-      Tuple _ p2 -> p2
-      Variable n1 n2 -> Variable n1 n2
+    go :: GroundExpr a -> Q (TExp a)
+    go expr = case expr of
+      G.Var n -> unsafeTExpCoerce (return (VarE (lookupName pat n)))
+      G.Double d -> [|| d ||]
+      G.Bool b -> [|| b ||]
+      G.Fun Add -> [|| (+) ||]
+      G.Fun Sub -> [|| (-) ||]
+      G.Fun Mult -> [|| (*) ||]
+      G.Fun Div -> [|| (/) ||]
+      G.Fun Pow -> [|| (**) ||]
+      G.Fun Abs -> [|| abs ||]
+      G.Fun Signum -> [|| signum ||]
+      G.Fun Sin -> [|| sin ||]
+      G.Fun Cos -> [|| cos ||]
+      G.App e1 e2 -> [|| $$(go e1) $$(go e2) ||]

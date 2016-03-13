@@ -3,16 +3,28 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
 module Language.Frontend
- ( arr
+ ( SynArrow(Arr)
+ , arr
  , first
  , second
  , (***)
  , (&&&)
  , (>>>)
+ , (<<<)
  , loop
+ , loopD
+ , unfold
+ , scan
+ , integral
  , init
- , const
- , sconst
+ , true
+ , false
+ , double
+ , (*)
+ , (+)
+ , (-)
+ , (**)
+ , sin
  , Category (..)
  , Internalizable (..)
  , Externalizable (..)
@@ -24,25 +36,58 @@ module Language.Frontend
  , Double
  , Int
  , Bool
- , P.Num (..)
+ , compile
+ , prettyPrint
+ , abstractSyntax
+ , showSignal
  )
 where
 
-import           Prelude (Double,Int,Bool)
+import           Prelude (Double,Int,Bool,($))
 import qualified Prelude as P
 
-import Control.Category
+import           Control.Category
 
+import qualified Language.Function as F
 import           Language.Expression
 import           Language.SimpleExpression (SimpleExpr)
 import qualified Language.SimpleExpression as S
 import           Language.SynArrow
-import           Language.Haskell.TH.Syntax
+import           Language.CodeGen.TH (compile,prettyPrint,abstractSyntax)
 
+type Signal a b = SynArrow SimpleExpr Function a b
 
-type Signal a b c = SynArrow (SimpleExpr Lift) (Function a) b c
+showSignal :: Signal a b -> P.String
+showSignal sig = showsSignal 0 sig ""
 
-arr :: Syntax (Expr a b -> Expr a c) => Fun (Expr a b) (Expr a c) -> SynArrow i (Function a) b c
+showsSignal :: Int -> Signal a b -> P.ShowS
+showsSignal d e = case e of
+  (Arr f) -> P.showParen (d P.> app_prec)
+           $ P.showString "arr "
+           . (P.showParen P.True $ P.showsPrec (app_prec P.+ 1) f)
+  (First f) -> P.showParen (d P.> app_prec)
+             $ P.showString "first "
+             . showsSignal (app_prec P.+ 1) f
+  (Compose f g) -> P.showParen (d P.> compose_prec)
+               $ showsSignal (compose_prec P.+1) f
+               . P.showString " >>> "
+               . showsSignal (d P.+ 1) g
+  (Init i) -> P.showParen (d P.> app_prec)
+            $ P.showString "init "
+            . P.showsPrec (app_prec P.+ 1) i
+  (LoopD i f) -> P.showParen (d P.> app_prec)
+               $ P.showString "loopD "
+               . P.showsPrec (app_prec P.+ 1) i
+               . P.showString " "
+               . P.showsPrec (app_prec P.+ 1) f
+  (Loop f) -> P.showParen (d P.> app_prec)
+               $ P.showString "loop "
+               . showsSignal (app_prec P.+ 1) f
+  where
+    app_prec = 10
+    compose_prec = 1
+
+arr :: Syntax (Expr a -> Expr b) => Fun a b -> SynArrow i Function a b
 arr = Arr . Function . externalize
 
 first :: SynArrow i a b c -> SynArrow i a (b,d) (c,d)
@@ -60,14 +105,52 @@ f &&& g = Arr dup >>> f *** g
 loop :: SynArrow i a (b,d) (c,d) -> SynArrow i a b c
 loop = Loop
 
+loopD :: Syntax (Expr (b,d) -> Expr (c,d)) => i d -> Fun (b,d) (c,d) -> SynArrow i Function b c
+loopD i f = LoopD i (Function (externalize f))
+
+unfold :: (Syntax (Expr c), Syntax (Expr b), Syntax (Expr d))
+       => Fun c (b,c) -> SimpleExpr c -> Signal d b
+unfold f s = loopD s (\(_,x) -> f x)
+
+scan :: (Syntax (Expr a), Syntax (Expr b), Syntax (Expr (a,b) -> Expr b))
+     => Fun (a,b) b -> SimpleExpr b -> Signal a b
+scan f s = loopD s (\x -> let y = f x in (y,y))
+
+integral :: Int -> Signal Double Double
+integral rate = scan (\(i,x) -> i + x * double dt) (externalize 0)
+  where
+    dt = 1 P./ P.fromIntegral rate
+
 init :: i b -> SynArrow i a b b
 init = Init
 
-const :: b -> Expr a b
-const = Const
+double :: Double -> Expr Double
+double = Double
 
-sconst :: a -> SimpleExpr a
-sconst = S.Const
+true :: Expr Bool
+true = Bool P.True
+
+false :: Expr Bool
+false = Bool P.False
+
+(*) :: Expr Double -> Expr Double -> Expr Double
+(*) = fun2 F.Mult
+infixl 7 *
+
+(-) :: Expr Double -> Expr Double -> Expr Double
+(-) = fun2 F.Sub
+infixl 6 -
+
+(+) :: Expr Double -> Expr Double -> Expr Double
+(+) = fun2 F.Add
+infixl 6 +
+
+(**) :: Expr Double -> Expr Double -> Expr Double
+(**) = fun2 F.Pow
+infixr 8 **
+
+sin :: Expr Double -> Expr Double
+sin = fun1 F.Sin
 
 class Internalizable a where
   type Internal a :: *
@@ -77,67 +160,63 @@ class Externalizable a where
   type External a :: *
   externalize :: External a -> a
 
-type Fun a b = Internal a -> External b
+type Fun a b = Internal (Expr a) -> External (Expr b)
 type Syntax a = (Internalizable a, Externalizable a)
 
-instance (Externalizable (SimpleExpr c a), Externalizable (SimpleExpr c b)) => Externalizable (SimpleExpr c (a,b)) where
-  type External (SimpleExpr c (a,b)) = (External (SimpleExpr c a), External (SimpleExpr c b))
+instance (Externalizable (SimpleExpr a), Externalizable (SimpleExpr b)) => Externalizable (SimpleExpr (a,b)) where
+  type External (SimpleExpr (a,b)) = (External (SimpleExpr a), External (SimpleExpr b))
   externalize (a,b) = S.Inj (externalize a) (externalize b)
 
-instance Externalizable (SimpleExpr c Double) where
-  type External (SimpleExpr c Double) = Double
-  externalize = S.Const
+instance Externalizable (SimpleExpr Double) where
+  type External (SimpleExpr Double) = Double
+  externalize = S.Double
 
-instance Externalizable (SimpleExpr c Int) where
-  type External (SimpleExpr c Int) = Int
-  externalize = S.Const
+instance Externalizable (SimpleExpr Bool) where
+  type External (SimpleExpr Bool) = Bool
+  externalize = S.Bool
 
-instance Externalizable (SimpleExpr c Bool) where
-  type External (SimpleExpr c Bool) = Bool
-  externalize = S.Const
+instance Externalizable (SimpleExpr ()) where
+  type External (SimpleExpr ()) = ()
+  externalize _ = S.Unit
 
-instance Externalizable (SimpleExpr c ()) where
-  type External (SimpleExpr c ()) = ()
-  externalize = S.Const
-
-instance (Internalizable (Expr a b), Internalizable (Expr a c)) => Internalizable (Expr a (b,c)) where
-  type Internal (Expr a (b,c)) = (Internal (Expr a b), Internal (Expr a c))
+instance (Internalizable (Expr a), Internalizable (Expr b)) => Internalizable (Expr (a,b)) where
+  type Internal (Expr (a,b)) = (Internal (Expr a), Internal (Expr b))
   internalize expr = (internalize (Proj1 expr), internalize (Proj2 expr))
 
-instance (Externalizable (Expr a b), Externalizable (Expr a c)) => Externalizable (Expr a (b,c)) where
-  type External (Expr a (b,c)) = (External (Expr a b), External (Expr a c))
+instance (Externalizable (Expr a), Externalizable (Expr b)) => Externalizable (Expr (a,b)) where
+  type External (Expr (a,b)) = (External (Expr a), External (Expr b))
   externalize (e1,e2) = Inj (externalize e1) (externalize e2)
 
-instance Internalizable (Expr a ()) where
-  type Internal (Expr a ()) = Expr a ()
+instance Internalizable (Expr ()) where
+  type Internal (Expr ()) = Expr ()
   internalize = id
 
-instance Externalizable (Expr a ()) where
-  type External (Expr a ()) = Expr a ()
+instance Externalizable (Expr ()) where
+  type External (Expr ()) = Expr ()
   externalize = id
 
-instance Internalizable (Expr a Double) where
-  type Internal (Expr a Double) = Expr a Double
+instance Internalizable (Expr Double) where
+  type Internal (Expr Double) = Expr Double
   internalize = id
 
-instance Externalizable (Expr a Double) where
-  type External (Expr a Double) = Expr a Double
+instance Externalizable (Expr Double) where
+  type External (Expr Double) = Expr Double
   externalize = id
 
-instance Internalizable (Expr a Int) where
-  type Internal (Expr a Int) = Expr a Int
+instance Internalizable (Expr Int) where
+  type Internal (Expr Int) = Expr Int
   internalize = id
 
-instance Externalizable (Expr a Int) where
-  type External (Expr a Int) = Expr a Int
+instance Externalizable (Expr Int) where
+  type External (Expr Int) = Expr Int
   externalize = id
 
-instance Internalizable (Expr a Bool) where
-  type Internal (Expr a Bool) = Expr a Bool
+instance Internalizable (Expr Bool) where
+  type Internal (Expr Bool) = Expr Bool
   internalize = id
 
-instance Externalizable (Expr a Bool) where
-  type External (Expr a Bool) = Expr a Bool
+instance Externalizable (Expr Bool) where
+  type External (Expr Bool) = Expr Bool
   externalize = id
 
 instance (Externalizable a, Internalizable b) => Internalizable (a -> b) where

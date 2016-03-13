@@ -25,7 +25,8 @@ data SynArrow i a b c where
 
 instance Show (SynArrow i a b c) where
   showsPrec d e = case e of
-    (Arr _) -> showParen (d > app_prec) $ showString "arr _"
+    (Arr _) -> showParen (d > app_prec)
+             $ showString "arr _"
     (First f) -> showParen (d > app_prec)
                $ showString "first "
                . showsPrec (app_prec+1) f
@@ -83,14 +84,31 @@ optimize a0 =
     single :: (SemiArrow a, Product i) => SynArrow i a b c -> SynArrow i a b c
     single b0 =
         case b0 of
+          -- composition
           Compose (Arr f) (Arr g) -> Arr (f >>> g)
+
+          -- left tightening
           Compose (Arr f) (LoopD i g) -> LoopD i ((f >< id) >>> g)
+
+          -- right tightening
           Compose (LoopD i f) (Arr g) -> LoopD i (f >>> (g >< id))
+
+          -- sequencing
           Compose (LoopD i f) (LoopD j g) ->
             LoopD (inj i j) $ assoc' (juggle' (g >< id) . (f >< id))
+
+          -- extension
           First (Arr f) -> Arr (f >< id)
+
+          -- superposing
+          First (LoopD i f) -> LoopD i (juggle' (f >< id))
+
+          -- loop-extension
           Loop (Arr f) -> LoopD fix f
+
+          -- vanishing
           Loop (LoopD i f) -> LoopD (inj fix i) (assoc' f)
+
           a -> a
 
     assoc' f = assoc2 >>> f >>> assoc1

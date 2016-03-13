@@ -1,16 +1,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
-module Language.Example where
+module Sound.Sine where
 
 import qualified Prelude as P
 import           Language.Frontend
+import           Sound.Types
 
-unfold :: (Syntax (Expr c), Syntax (Expr b), Syntax (Expr d))
-       => Fun (Expr c) (Expr (b,c)) -> SimpleExpr c -> Signal d b
-unfold f s = loop (arr (\(_,x) -> f x) >>> second (init s))
-
-type Frequency = Double
-type Rate = Int
+oscSine :: Frequency -> Rate -> Signal Double Double
+oscSine f0 rate =
+      arr (\freq -> double (2 P.* P.pi P.* f0) * double 2 ** freq)
+  >>> integral rate
+  >>> arr sin
 
 sinA :: Frequency -> Rate -> Signal () Double
 sinA freq rate =
@@ -19,3 +19,9 @@ sinA freq rate =
       c    = 2 P.* P.cos omh
   in unfold (\(y1,y2) -> let y = double c * y1 - y2 in (y2,(y,y1)))
             (externalize (i,0) :: SimpleExpr (Double,Double))
+
+amp :: Double -> Signal Double Double
+amp c = arr (\x -> double c * x)
+
+add :: Double -> Signal Double Double
+add c = arr (\x -> double c + x)
