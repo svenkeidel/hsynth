@@ -20,11 +20,10 @@ module Language.Frontend
  , true
  , false
  , double
- , (*)
- , (+)
- , (-)
- , (**)
- , sin
+ , fromIntegral
+ , Num(..)
+ , Fractional(..)
+ , Floating(..)
  , Category (..)
  , Internalizable (..)
  , Externalizable (..)
@@ -43,12 +42,10 @@ module Language.Frontend
  )
 where
 
-import           Prelude (Double,Int,Bool,($))
-import qualified Prelude as P
+import           Prelude hiding ((.),id,init)
 
 import           Control.Category
 
-import qualified Language.Function as F
 import           Language.Expression
 import           Language.SimpleExpression (SimpleExpr)
 import qualified Language.SimpleExpression as S
@@ -57,32 +54,32 @@ import           Language.CodeGen.TH (compile,prettyPrint,abstractSyntax)
 
 type Signal a b = SynArrow SimpleExpr Function a b
 
-showSignal :: Signal a b -> P.String
+showSignal :: Signal a b -> String
 showSignal sig = showsSignal 0 sig ""
 
-showsSignal :: Int -> Signal a b -> P.ShowS
+showsSignal :: Int -> Signal a b -> ShowS
 showsSignal d e = case e of
-  (Arr f) -> P.showParen (d P.> app_prec)
-           $ P.showString "arr "
-           . (P.showParen P.True $ P.showsPrec (app_prec P.+ 1) f)
-  (First f) -> P.showParen (d P.> app_prec)
-             $ P.showString "first "
-             . showsSignal (app_prec P.+ 1) f
-  (Compose f g) -> P.showParen (d P.> compose_prec)
-               $ showsSignal (compose_prec P.+1) f
-               . P.showString " >>> "
-               . showsSignal (d P.+ 1) g
-  (Init i) -> P.showParen (d P.> app_prec)
-            $ P.showString "init "
-            . P.showsPrec (app_prec P.+ 1) i
-  (LoopD i f) -> P.showParen (d P.> app_prec)
-               $ P.showString "loopD "
-               . P.showsPrec (app_prec P.+ 1) i
-               . P.showString " "
-               . P.showsPrec (app_prec P.+ 1) f
-  (Loop f) -> P.showParen (d P.> app_prec)
-               $ P.showString "loop "
-               . showsSignal (app_prec P.+ 1) f
+  (Arr f) -> showParen (d > app_prec)
+           $ showString "arr "
+           . (showParen True $ showsPrec (app_prec + 1) f)
+  (First f) -> showParen (d > app_prec)
+             $ showString "first "
+             . showsSignal (app_prec + 1) f
+  (Compose f g) -> showParen (d > compose_prec)
+               $ showsSignal (compose_prec +1) f
+               . showString " >>> "
+               . showsSignal (d + 1) g
+  (Init i) -> showParen (d > app_prec)
+            $ showString "init "
+            . showsPrec (app_prec + 1) i
+  (LoopD i f) -> showParen (d > app_prec)
+               $ showString "loopD "
+               . showsPrec (app_prec + 1) i
+               . showString " "
+               . showsPrec (app_prec + 1) f
+  (Loop f) -> showParen (d > app_prec)
+            $ showString "loop "
+            . showsSignal (app_prec + 1) f
   where
     app_prec = 10
     compose_prec = 1
@@ -117,40 +114,21 @@ scan :: (Syntax (Expr a), Syntax (Expr b), Syntax (Expr (a,b) -> Expr b))
 scan f s = loopD s (\x -> let y = f x in (y,y))
 
 integral :: Int -> Signal Double Double
-integral rate = scan (\(i,x) -> i + x * double dt) (externalize 0)
+integral rate = scan (\(i,x) -> i + x * dt) (externalize 0)
   where
-    dt = 1 P./ P.fromIntegral rate
+    dt = 1 / fromIntegral rate
 
 init :: i b -> SynArrow i a b b
 init = Init
 
-double :: Double -> Expr Double
-double = Double
-
 true :: Expr Bool
-true = Bool P.True
+true = Const True
 
 false :: Expr Bool
-false = Bool P.False
+false = Const False
 
-(*) :: Expr Double -> Expr Double -> Expr Double
-(*) = fun2 F.Mult
-infixl 7 *
-
-(-) :: Expr Double -> Expr Double -> Expr Double
-(-) = fun2 F.Sub
-infixl 6 -
-
-(+) :: Expr Double -> Expr Double -> Expr Double
-(+) = fun2 F.Add
-infixl 6 +
-
-(**) :: Expr Double -> Expr Double -> Expr Double
-(**) = fun2 F.Pow
-infixr 8 **
-
-sin :: Expr Double -> Expr Double
-sin = fun1 F.Sin
+double :: Double -> Expr Double
+double = Const
 
 class Internalizable a where
   type Internal a :: *
@@ -169,11 +147,11 @@ instance (Externalizable (SimpleExpr a), Externalizable (SimpleExpr b)) => Exter
 
 instance Externalizable (SimpleExpr Double) where
   type External (SimpleExpr Double) = Double
-  externalize = S.Double
+  externalize = S.Const
 
 instance Externalizable (SimpleExpr Bool) where
   type External (SimpleExpr Bool) = Bool
-  externalize = S.Bool
+  externalize = S.Const
 
 instance Externalizable (SimpleExpr ()) where
   type External (SimpleExpr ()) = ()

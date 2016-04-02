@@ -5,12 +5,14 @@ module Language.GroundExpr(GroundExpr(..),Floor(..),floor,Two(..)) where
 
 import           Prelude hiding (floor)
 
+import           Data.Text (Text)
+
 import           Data.Sequence (Seq,(<|),(|>))
 import qualified Data.Sequence as S
 
 import Language.Expression (Expr)
 import qualified Language.Expression as Full
-import Language.Function
+import Language.Haskell.TH.Syntax
 
 data Two = One | Two
   deriving (Eq,Ord)
@@ -21,13 +23,10 @@ instance Show Two where
 
 data GroundExpr a where
   Var :: Seq Two -> GroundExpr a
-  Double :: Double -> GroundExpr Double
-  Bool :: Bool -> GroundExpr Bool
+  Const :: (Lift a, Show a) => a -> GroundExpr a
 
   App :: GroundExpr (a -> b) -> GroundExpr a -> GroundExpr b
-  Fun :: Fun (a -> b) -> GroundExpr (a -> b)
-
-deriving instance Show (GroundExpr a)
+  Fun :: Text -> Q (TExp (a -> b)) -> GroundExpr (a -> b)
 
 data Floor a where
   Inj :: Floor a -> Floor b -> Floor (a,b)
@@ -52,16 +51,15 @@ lowerExpr = go S.empty
       Full.Proj1 e1 -> coerceLeft $ go (One <| addr) e1
       Full.Proj2 e1 -> coerceRight $ go (Two <| addr) e1
       Full.Var -> Var addr
-      Full.Bool b -> Bool b
-      Full.Double d -> Double d
+      Full.Const c -> Const c
       Full.App e1 e2 -> App (go addr e1) (go addr e2)
-      Full.Fun f -> Fun f
+      Full.Fun f q -> Fun f q
       _ -> error "did not expect injection at this point"
 
     coerceLeft :: GroundExpr (a,b) -> GroundExpr a
     coerceLeft (Var v) = Var v
-    coerceLeft (App _ _) = error "cannot coerce function that produces a tuple"
+    coerceLeft _ = error "cannot coerce function that produces a tuple"
 
     coerceRight :: GroundExpr (a,b) -> GroundExpr b
     coerceRight (Var v) = Var v
-    coerceRight (App _ _) = error "cannot coerce function that produces a tuple"
+    coerceRight _ = error "cannot coerce function that produces a tuple"

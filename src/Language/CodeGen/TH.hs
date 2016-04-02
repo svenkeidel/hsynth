@@ -16,7 +16,6 @@ import           Data.Map (Map)
 import           Language.Haskell.TH.Syntax hiding (lookupName)
 import           Language.Haskell.TH.Ppr
 import           Language.Expression
-import           Language.Function
 import           Language.SynArrow
 import           Language.SimpleExpression (SimpleExpr,CompressedSimpleExpr(..),Decide(..),merge)
 import qualified Language.SimpleExpression as Simple
@@ -47,8 +46,7 @@ reifySimpleExpr expr = case Simple.compressSimpleExpr expr of
 reifyCompressedSimpleExp :: CompressedSimpleExpr a -> Q Exp
 reifyCompressedSimpleExp expr = case expr of
   CInj e1 e2 -> [| ($(reifyCompressedSimpleExp e1),$(reifyCompressedSimpleExp e2) ) |]
-  CDouble d -> [| d |]
-  CBool b -> [| b |]
+  CConst c -> [| c |]
   CUnit -> [| () |]
 
 data Pattern a where
@@ -127,15 +125,6 @@ reifyExpr pat = go
     go :: GroundExpr a -> Q (TExp a)
     go expr = case expr of
       G.Var n -> unsafeTExpCoerce (return (VarE (lookupName pat n)))
-      G.Double d -> [|| d ||]
-      G.Bool b -> [|| b ||]
-      G.Fun Add -> [|| (+) ||]
-      G.Fun Sub -> [|| (-) ||]
-      G.Fun Mult -> [|| (*) ||]
-      G.Fun Div -> [|| (/) ||]
-      G.Fun Pow -> [|| (**) ||]
-      G.Fun Abs -> [|| abs ||]
-      G.Fun Signum -> [|| signum ||]
-      G.Fun Sin -> [|| sin ||]
-      G.Fun Cos -> [|| cos ||]
+      G.Const c -> [|| c ||]
+      G.Fun _ q -> q
       G.App e1 e2 -> [|| $$(go e1) $$(go e2) ||]

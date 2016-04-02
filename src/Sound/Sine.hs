@@ -2,21 +2,21 @@
 {-# LANGUAGE TypeFamilies #-}
 module Sound.Sine where
 
-import qualified Prelude as P
+import           Prelude ()
 import           Language.Frontend
 import           Sound.Types
 
 oscSine :: Frequency -> Rate -> Signal Double Double
 oscSine f0 rate =
-      arr (\freq -> double (2 P.* P.pi P.* f0) * double 2 ** freq)
+      arr (\freq -> double (2 * pi * f0) * double 2 ** freq)
   >>> integral rate
   >>> arr sin
 
 sinA :: Frequency -> Rate -> Signal () Double
 sinA freq rate =
-  let omh  = 2 P.* P.pi P.* freq P./ P.fromIntegral rate
-      i    = P.sin omh
-      c    = 2 P.* P.cos omh
+  let omh  = 2 * pi * freq / fromIntegral rate
+      i    = sin omh :: Double
+      c    = 2 * cos omh :: Double
   in unfold (\(y1,y2) -> let y = double c * y1 - y2 in (y2,(y,y1)))
             (externalize (i,0) :: SimpleExpr (Double,Double))
 

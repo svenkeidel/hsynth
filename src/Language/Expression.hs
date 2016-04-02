@@ -3,32 +3,32 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Language.Expression where
 
 import Prelude hiding ((.),id)
 
 import Control.Category
 
-import Language.Function
 import Language.SynArrow
+import Language.Haskell.TH.Syntax
+
+import           Data.Text (Text)
 
 data Expr a where
   Var :: Expr a
-  Double :: Double -> Expr Double
-  Bool :: Bool -> Expr Bool
+  Const :: (Lift a, Show a) => a -> Expr a
 
-  Fun :: Fun (a -> b) -> Expr (a -> b)
+  Fun :: Text -> Q (TExp (a -> b)) -> Expr (a -> b)
   App :: Expr (a -> b) -> Expr a -> Expr b
 
   Inj :: Expr a -> Expr b -> Expr (a,b)
   Proj1 :: Expr (a,b) -> Expr a
   Proj2 :: Expr (a,b) -> Expr b
 
-deriving instance (Show (Expr a))
-
-pattern Fun1 f e1 = App (Fun f) e1
-pattern Fun2 f e1 e2 = App (App (Fun f) e1) e2
+pattern Fun1 f q e1 = App (Fun f q) e1
+pattern Fun2 f q e1 e2 = App (App (Fun f q) e1) e2
 
 optimizeExpr :: Expr a -> Expr a
 optimizeExpr e = case e of
@@ -60,8 +60,68 @@ instance SemiArrow Function where
   Function f >< Function g = Function $ \x -> Inj (f (Proj1 x)) (g (Proj2 x))
   dup = Function $ \x -> Inj x x
 
-fun1 :: Fun (a -> b) -> Expr a -> Expr b
-fun1 f e1 = Fun f `App` e1
+fun1 :: Text -> Q (TExp (a -> b)) -> Expr a -> Expr b
+fun1 s f e1 = Fun s f `App` e1
 
-fun2 :: Fun (a -> b -> c) -> Expr a -> Expr b -> Expr c
-fun2 f e1 e2 = fun1 f e1 `App` e2
+fun2 :: Text -> Q (TExp (a -> b -> c)) -> Expr a -> Expr b -> Expr c
+fun2 s f e1 e2 = fun1 s f e1 `App` e2
+
+instance Show (Expr a) where
+  showsPrec d e = case e of
+    Var -> showString "x"
+    Const x -> shows x
+    Fun f _ -> shows f
+    App e1 e2 -> showParen (d > app_prec)
+               $ showsPrec (app_prec + 1) e1
+               . showString " "
+               . showsPrec (app_prec + 1) e2
+    Inj e1 e2 -> showParen (d > app_prec)
+               $ showString "("
+               . showsPrec (app_prec + 1) e1
+               . showString ","
+               . showsPrec (app_prec + 1) e2
+               . showString ")"
+    Proj1 expr -> showParen (d > app_prec)
+               $ showString "fst "
+               . showsPrec (app_prec + 1) expr
+    Proj2 expr -> showParen (d > app_prec)
+               $ showString "snd "
+               . showsPrec (app_prec + 1) expr
+    where
+      app_prec = 10
+
+
+instance (Show a, Lift a, Num a) => Num (Expr a) where
+  (+) = fun2 "(+)" [|| (+) ||]
+  (-) = fun2 "(-)" [|| (-) ||]
+  (*) = fun2 "(*)" [|| (*) ||]
+  abs = fun1 "abs" [|| abs ||]
+  signum = fun1 "signum" [|| signum ||]
+  fromInteger = Const . fromIntegral
+
+instance (Show a, Lift a, Fractional a) => Fractional (Expr a) where
+  fromRational = Const . fromRational
+  (/) = fun2 "(/)" [|| (/) ||]
+
+instance (Show a, Lift a, Floating a) => Floating (Expr a) where
+  pi = Const pi
+  exp = fun1 "exp" [|| exp ||]
+  log = fun1 "log" [|| exp ||]
+  sqrt = fun1 "sqrt" [|| exp ||]
+  (**) = fun2 "(**)" [|| (**) ||]
+  logBase = fun2 "exp" [|| logBase ||]
+
+  sin = fun1 "sin" [|| sin ||]
+  asin = fun1 "asin" [|| asin ||]
+  sinh = fun1 "sinh" [|| sinh ||]
+  asinh = fun1 "asinh" [|| asinh ||]
+
+  cos = fun1 "cos" [|| cos ||]
+  acos = fun1 "acos" [|| acos ||]
+  cosh = fun1 "cosh" [|| cosh ||]
+  acosh = fun1 "acosh" [|| acosh ||]
+
+  tan = fun1 "tan" [|| tan ||]
+  atan = fun1 "atan" [|| atan ||]
+  tanh = fun1 "tanh" [|| tanh ||]
+  atanh = fun1 "atanh" [|| atanh ||]
