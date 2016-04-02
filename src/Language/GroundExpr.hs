@@ -25,6 +25,8 @@ data GroundExpr a where
   Var :: Seq Two -> GroundExpr a
   Const :: (Lift a, Show a) => a -> GroundExpr a
 
+  If :: GroundExpr Bool -> GroundExpr a -> GroundExpr a -> GroundExpr a
+
   App :: GroundExpr (a -> b) -> GroundExpr a -> GroundExpr b
   Fun :: Text -> Q (TExp (a -> b)) -> GroundExpr (a -> b)
 
@@ -54,6 +56,7 @@ lowerExpr = go S.empty
       Full.Const c -> Const c
       Full.App e1 e2 -> App (go addr e1) (go addr e2)
       Full.Fun f q -> Fun f q
+      Full.If e1 e2 e3 -> If (go addr e1) (go addr e2) (go addr e3)
       _ -> error "did not expect injection at this point"
 
     coerceLeft :: GroundExpr (a,b) -> GroundExpr a

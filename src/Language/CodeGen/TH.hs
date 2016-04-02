@@ -128,3 +128,4 @@ reifyExpr pat = go
       G.Const c -> [|| c ||]
       G.Fun _ q -> q
       G.App e1 e2 -> [|| $$(go e1) $$(go e2) ||]
+      G.If e1 e2 e3 -> [|| if $$(go e1) then $$(go e2) else $$(go e3) ||]

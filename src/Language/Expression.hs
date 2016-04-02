@@ -23,6 +23,8 @@ data Expr a where
   Fun :: Text -> Q (TExp (a -> b)) -> Expr (a -> b)
   App :: Expr (a -> b) -> Expr a -> Expr b
 
+  If :: Expr Bool -> Expr a -> Expr a -> Expr a
+
   Inj :: Expr a -> Expr b -> Expr (a,b)
   Proj1 :: Expr (a,b) -> Expr a
   Proj2 :: Expr (a,b) -> Expr b
@@ -42,6 +44,7 @@ optimizeExpr e = case e of
     e1 -> Proj2 e1
   Inj e1 e2 -> Inj (optimizeExpr e1) (optimizeExpr e2)
   App e1 e2 -> App (optimizeExpr e1) (optimizeExpr e2)
+  If e1 e2 e3 -> If (optimizeExpr e1) (optimizeExpr e2) (optimizeExpr e3)
   e1 -> e1
 
 newtype Function a b = Function (Expr a -> Expr b)
@@ -66,6 +69,9 @@ fun1 s f e1 = Fun s f `App` e1
 fun2 :: Text -> Q (TExp (a -> b -> c)) -> Expr a -> Expr b -> Expr c
 fun2 s f e1 e2 = fun1 s f e1 `App` e2
 
+fun3 :: Text -> Q (TExp (a -> b -> c -> d)) -> Expr a -> Expr b -> Expr c -> Expr d
+fun3 s f e1 e2 e3 = fun2 s f e1 e2 `App` e3
+
 instance Show (Expr a) where
   showsPrec d e = case e of
     Var -> showString "x"
@@ -75,6 +81,12 @@ instance Show (Expr a) where
                $ showsPrec (app_prec + 1) e1
                . showString " "
                . showsPrec (app_prec + 1) e2
+    If e1 e2 e3 -> showParen (d > app_prec)
+                 $ showsPrec (app_prec + 1) e1
+                 . showString " "
+                 . showsPrec (app_prec + 1) e2
+                 . showString " "
+                 . showsPrec (app_prec + 1) e3
     Inj e1 e2 -> showParen (d > app_prec)
                $ showString "("
                . showsPrec (app_prec + 1) e1

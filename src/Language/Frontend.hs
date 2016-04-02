@@ -2,47 +2,31 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Language.Frontend
- ( SynArrow(Arr)
- , arr
- , first
- , second
- , (***)
- , (&&&)
- , (>>>)
- , (<<<)
- , loop
- , loopD
- , unfold
- , scan
- , integral
- , init
- , true
- , false
- , double
- , fromIntegral
- , Num(..)
- , Fractional(..)
- , Floating(..)
- , Category (..)
+ ( SynArrow(Arr), arr, first, second, (***), (&&&), (>>>), (<<<)
+ , loop, loopD, init, Category (..)
+
+ , unfold, scan, integral
+
+ , true, false, (==), (/=), Expr(If)
+ , (<), (<=), (>), (>=)
+
+ , double, fromIntegral , Num(..), Fractional(..), Floating(..)
+
  , Internalizable (..)
  , Externalizable (..)
- , Fun
- , Signal
- , Syntax
- , Expr
- , SimpleExpr
- , Double
- , Int
- , Bool
- , compile
- , prettyPrint
- , abstractSyntax
- , showSignal
+
+ , Signal, Fun, Syntax, SimpleExpr, Double, Int, Bool
+
+ , compile, prettyPrint, abstractSyntax, showSignal
  )
 where
 
-import           Prelude hiding ((.),id,init)
+import           Prelude hiding ((.),id,init,(==),(/=),(<),(<=),(>=),(>))
+
+import qualified Prelude as P
 
 import           Control.Category
 
@@ -59,25 +43,25 @@ showSignal sig = showsSignal 0 sig ""
 
 showsSignal :: Int -> Signal a b -> ShowS
 showsSignal d e = case e of
-  (Arr f) -> showParen (d > app_prec)
+  (Arr f) -> showParen (d P.> app_prec)
            $ showString "arr "
            . (showParen True $ showsPrec (app_prec + 1) f)
-  (First f) -> showParen (d > app_prec)
+  (First f) -> showParen (d P.> app_prec)
              $ showString "first "
              . showsSignal (app_prec + 1) f
-  (Compose f g) -> showParen (d > compose_prec)
+  (Compose f g) -> showParen (d P.> compose_prec)
                $ showsSignal (compose_prec +1) f
                . showString " >>> "
                . showsSignal (d + 1) g
-  (Init i) -> showParen (d > app_prec)
+  (Init i) -> showParen (d P.> app_prec)
             $ showString "init "
             . showsPrec (app_prec + 1) i
-  (LoopD i f) -> showParen (d > app_prec)
+  (LoopD i f) -> showParen (d P.> app_prec)
                $ showString "loopD "
                . showsPrec (app_prec + 1) i
                . showString " "
                . showsPrec (app_prec + 1) f
-  (Loop f) -> showParen (d > app_prec)
+  (Loop f) -> showParen (d P.> app_prec)
             $ showString "loop "
             . showsSignal (app_prec + 1) f
   where
@@ -129,6 +113,24 @@ false = Const False
 
 double :: Double -> Expr Double
 double = Const
+
+(==) :: Eq a => Expr a -> Expr a -> Expr Bool
+(==) = fun2 "(==)" [|| (P.==) ||]
+
+(/=) :: Eq a => Expr a -> Expr a -> Expr Bool
+(/=) = fun2 "(==)" [|| (P./=) ||]
+
+(<) :: Ord a => Expr a -> Expr a -> Expr Bool
+(<) = fun2 "(<)" [|| (P.<) ||]
+
+(<=) :: Ord a => Expr a -> Expr a -> Expr Bool
+(<=) = fun2 "(<=)" [|| (P.<=) ||]
+
+(>) :: Ord a => Expr a -> Expr a -> Expr Bool
+(>) = fun2 "(>)" [|| (P.>) ||]
+
+(>=) :: Ord a => Expr a -> Expr a -> Expr Bool
+(>=) = fun2 "(>=)" [|| (P.>=) ||]
 
 class Internalizable a where
   type Internal a :: *

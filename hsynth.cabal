@@ -6,7 +6,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Sven Keidel
 maintainer:          svenkeidel@gmail.com
-copyright:           Sven Keidel, 2016
+copyright:           Copyright (c) 2015, Sven Keidel
 category:            Language
 build-type:          Simple
 cabal-version:       >=1.10
@@ -23,11 +23,12 @@ library
   exposed-modules:     Data.MidiFile,
                        Data.MidiMessage,
                        Data.MidiManufacturer,
-                       Data.MidiManufacturerTH,
                        Data.SMPTE,
                        Language.Frontend
-                       Sound.Sine
-  other-modules:       Language.Expression,
+                       Sound.Sine,
+                       Sound.Types
+  other-modules:       Data.MidiManufacturerTH,
+                       Language.Expression,
                        Language.SimpleExpression,
                        Language.GroundExpr,
                        Language.Function,
