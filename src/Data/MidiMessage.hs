@@ -94,8 +94,7 @@ data SystemRealTimeMessage
 getMessages :: ByteString -> [MidiMessage]
 getMessages = go (decoder None)
   where
-    decoder status = do
-      runGetIncremental (runStateT getMessage status)
+    decoder status = runGetIncremental (runStateT getMessage status)
 
     go :: Decoder (MidiMessage,RunningStatus) -> ByteString -> [MidiMessage]
     go (Done leftover _ (msg,status)) input =
@@ -121,13 +120,13 @@ getMessage = do
     0b1011 -> getController chan
     0b1100 -> voiceMsg $ ProgramChange <$> getWord8
     0b1101 -> voiceMsg $ ChannelPressure <$> getWord8
-    0b1110 -> voiceMsg $ PitchBend <$> fromIntegral <$> getWord16be
+    0b1110 -> voiceMsg $ PitchBend . fromIntegral <$> getWord16be
     0b1111 -> getSystemMessage lastHalfWord
     _ -> do
       RunningStatus chan' status <- get
       Voice chan' <$> case status of
         (NoteOff _ _)               -> lift $ NoteOff word <$> getWord8
-        (NoteOn _ _)                -> lift $ fixNoteOnOff <$> NoteOn word <$> getWord8
+        (NoteOn _ _)                -> lift $ fixNoteOnOff . NoteOn word <$> getWord8
         (PolyphonicKeyPressure _ _) -> lift $ PolyphonicKeyPressure word <$> getWord8
         (ProgramChange _)           -> return $ ProgramChange word
         (ChannelPressure _)         -> return $ ChannelPressure word

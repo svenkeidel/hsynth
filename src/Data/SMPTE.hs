@@ -10,7 +10,7 @@ type Hour = Word8
 type Minute = Word8
 type Second = Word8
 type Frame = Word8
-type SubFrame = Word8
+--type SubFrame = Word8
 data SMPTETimeCode = SMPTETimeCode Hour Minute Second Frame
   deriving (Show,Eq)
 

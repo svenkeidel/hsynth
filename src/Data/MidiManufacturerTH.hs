@@ -46,7 +46,7 @@ manufacturerFromCsv fp = do
     Right ms -> return $ V.toList ms
 
 decodeManufacturer :: ByteString -> Either String (Vector ManufacturerEntry)
-decodeManufacturer = decodeWith (DecodeOptions { decDelimiter = fromIntegral (ord '|') }) NoHeader
+decodeManufacturer = decodeWith DecodeOptions { decDelimiter = fromIntegral (ord '|') } NoHeader
 
 -- | This function derives the following Haskell Code:
 --
@@ -84,7 +84,8 @@ deriveManufacturer manufacturers = [manufacturerData,getManufacturer1ByteDec, ge
       NormalC (mkName name) []
 
     getManufacturer1ByteDec =
-      FunD (mkName "getManufacturer1Byte") [Clause [] (NormalB getManufacturer1ByteBody) []]
+        FunD (mkName "getManufacturer1Byte")
+             [Clause [] (NormalB getManufacturer1ByteBody) []]
 
     getManufacturer1ByteBody =
       let word1 = mkName "word1"
@@ -115,7 +116,7 @@ deriveManufacturer manufacturers = [manufacturerData,getManufacturer1ByteDec, ge
                        ++ [Match WildP (NormalB (AppE (VarE (mkName "error")) (LitE (StringL "unknown manufacturer")))) []]
              ]
 
-    getManufacturer3ByteCase (ManufacturerEntry (ThreeByte word1 word2 word3) (ManufacturerName manufacturer)) = 
+    getManufacturer3ByteCase (ManufacturerEntry (ThreeByte word1 word2 word3) (ManufacturerName manufacturer)) =
       Just $ Match (TupP [wordL word1, wordL word2, wordL word3])
                    (NormalB (AppE (VarE (mkName "return")) (ConE (mkName manufacturer))))
                    []
@@ -130,7 +131,7 @@ simplifyManufacturerName :: String -> String
 simplifyManufacturerName = camelCase . dropSpecialCharacters . dropSuffix
   where
     camelCase :: String -> String
-    camelCase = concat . map (mapHead toUpper) . words
+    camelCase = concatMap (mapHead toUpper) . words
 
     mapHead :: (a -> a) -> [a] -> [a]
     mapHead f (a:as) = f a : as

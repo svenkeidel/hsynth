@@ -1,6 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 module Sound.Driver.Jack where
 
 import           Control.Concurrent.MVar
@@ -256,48 +255,39 @@ jackConnect client from to =
   withCString to $ \cto ->
     jack_connect client cfrom cto
 
--- runAudioWithMidi :: (Int -> Reactive MidiMessage (Vector Double)) -> IO ()
--- runAudioWithMidi r0 = do
---   withClient "hsynth" $ \client -> do
---     withOutputPort client "out" 0 $ \output -> do
---       withMidiInputPort client "midi_in" 0 $ \midiIn -> do
---         bufSize <- jack_get_buffer_size client
---         sig <- newMVar $ r0 (fromIntegral bufSize)
---         jackProcess client $ \nframes -> do
---           evnts <- getMidiEvents midiIn nframes
---           buf <- jack_port_get_buffer output nframes
---           modifyMVar_ sig $ \audio ->
---             let audio' = S.reacting evnts audio
---             in do
---               store buf nframes (S.head audio')
---               return (S.tail audio')
---         jackStartup client
---   where
---     store :: Ptr CFloat -> NFrames -> Vector Double -> IO ()
---     store bufOut n vec = V.unsafeWith (V.map double2CFloat vec) $ \bufIn ->
---       copyBytes bufOut bufIn (fromIntegral n)
+runAudioWithMidi :: ([MidiMessage] -> a -> a) -> AudioProcess a -> IO ()
+runAudioWithMidi onMidi (s0,f) = do
+  sig <- newMVar s0
+  withClient "hsynth" $ \client ->
+    withOutputPort client "out" 0 $ \output ->
+      withMidiInputPort client "midi_in" 0 $ \midiIn -> do
+        jackProcess client $ \nframes -> do
+          evnts <- getMidiEvents midiIn nframes
+          buf <- jack_port_get_buffer output nframes
+          modifyMVar_ sig $ store f buf nframes . onMidi evnts
+        jackStartup client
 
-runAudioFun :: forall a. (a,((),a) -> (Double,a)) -> IO ()
+runAudioFun :: AudioProcess a -> IO ()
 runAudioFun (s0,f) = do
   sig <- newMVar s0
-  withClient "hsynth" $ \client -> do
+  withClient "hsynth" $ \client ->
     withOutputPort client "out" 0 $ \output -> do
       jackProcess client $ \nframes -> do
         buf <- jack_port_get_buffer output nframes
-        modifyMVar_ sig $ store buf nframes
+        modifyMVar_ sig $ store f buf nframes
 
       jackStartup client
+
+store :: AudioFun a -> Ptr CFloat -> NFrames -> a -> IO a
+store f buf len = go 0
   where
-    store :: Ptr CFloat -> NFrames -> a -> IO a
-    store buf len = go 0
-      where
-        go :: Int -> a -> IO a
-        go i s
-          | i >= fromIntegral len = return s
-          | otherwise = do
-            let (d,s') = f ((),s)
-            pokeElemOff buf i (double2CFloat d)
-            go (i+1) s'
+    go :: Int -> a -> IO a
+    go i s
+      | i >= fromIntegral len = return s
+      | otherwise = do
+        let (d,s') = f ((),s)
+        pokeElemOff buf i (double2CFloat d)
+        go (i+1) s'
 
 runAudio :: Audio -> IO ()
 runAudio audio = do

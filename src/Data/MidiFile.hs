@@ -146,7 +146,7 @@ getMetaEvent trackNumber = do
     0x05 -> label "lyric" $ Lyric <$> getText
     0x06 -> label "marker" $ Marker <$> getText
     0x07 -> label "cue point" $ CuePoint <$> getText
-    0x20 -> label "midi channel prefix" $ skip 1 >> MidiChannelPrefix <$> fromIntegral <$> getWord8
+    0x20 -> label "midi channel prefix" $ skip 1 >> MidiChannelPrefix . fromIntegral <$> getWord8
     0x2F -> label "end of track" $ skip 1 >> return EndOfTrack
     0x51 -> label "set tempo" $ do
       t <- getWord32be
@@ -171,7 +171,7 @@ getMetaEvent trackNumber = do
         _ -> error "unrecognized key mode"
     0x7F -> label "sequencer specific" $ do
       n <- fromIntegral <$> getVariableLengthQuantity
-      SequencerSpecific <$> BL.fromStrict <$> getByteString n
+      SequencerSpecific . BL.fromStrict <$> getByteString n
     _ -> error "unrecognized meta event"
 
 getText :: Get Text
@@ -185,7 +185,7 @@ getSystemExclusiveEvent = do
   typ <- getWord8
   len <- fromIntegral <$> getVariableLengthQuantity
   case typ of
-    0xF0 -> SystemExclusiveStart <$> BL.fromStrict <$> getByteString len
+    0xF0 -> SystemExclusiveStart . BL.fromStrict <$> getByteString len
     0xF7 -> do
       dat <- BL.fromStrict <$> getByteString (len - 1)
       last' <- getWord8
