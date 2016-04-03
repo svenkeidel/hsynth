@@ -10,7 +10,7 @@ oscSine :: Frequency -> Rate -> Signal Double Double
 oscSine f0 rate =
       arr (\freq -> double (2 * pi * f0) * double 2 ** freq)
   >>> integral rate
-  >>> arr sin
+  >>> arr (sin :: Expr Double -> Expr Double)
 
 sinA :: Frequency -> Rate -> Signal () Double
 sinA freq rate =
@@ -18,10 +18,7 @@ sinA freq rate =
       i    = sin omh :: Double
       c    = 2 * cos omh :: Double
   in unfold (\(y1,y2) -> let y = double c * y1 - y2 in (y2,(y,y1)))
-            (externalize (i,0) :: SimpleExpr (Double,Double))
-
-amp :: Double -> Signal Double Double
-amp c = arr (\x -> double c * x)
+            (i,0)
 
 add :: Double -> Signal Double Double
 add c = arr (\x -> double c + x)

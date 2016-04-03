@@ -13,20 +13,18 @@ import Language.Haskell.TH.Syntax
 data SimpleExpr a where
   Inj :: SimpleExpr a -> SimpleExpr b -> SimpleExpr (a,b)
   Const :: (Lift a, Show a) => a -> SimpleExpr a
-  Unit :: SimpleExpr ()
   Fix :: SimpleExpr a
 
 deriving instance Show (SimpleExpr a)
 
 instance Product SimpleExpr where
-  unit = Unit
+  unit = Const ()
   inj = Inj
   fix = Fix
 
 data CompressedSimpleExpr a where
   CInj :: CompressedSimpleExpr a -> CompressedSimpleExpr b -> CompressedSimpleExpr (a,b)
   CConst :: (Lift a, Show a) => a -> CompressedSimpleExpr a
-  CUnit :: CompressedSimpleExpr ()
 
 data Decide f where
   Yes :: f a -> Decide f
@@ -45,7 +43,6 @@ merge f d1 d2 = case (d1,d2) of
 
 compressSimpleExpr :: SimpleExpr a -> Decide CompressedSimpleExpr
 compressSimpleExpr expr = case expr of
-  Unit -> Yes CUnit
   Const c -> Yes (CConst c)
   Fix -> No
   Inj e1 e2 -> merge (\e1' e2' -> Yes (CInj e1' e2')) (compressSimpleExpr e1) (compressSimpleExpr e2)

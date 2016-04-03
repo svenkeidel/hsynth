@@ -5,14 +5,13 @@ module Language.GroundExpr(GroundExpr(..),Floor(..),floor,Two(..)) where
 
 import           Prelude hiding (floor)
 
-import           Data.Text (Text)
-
 import           Data.Sequence (Seq,(<|),(|>))
 import qualified Data.Sequence as S
+import           Data.Text (Text)
 
-import Language.Expression (Expr)
+import           Language.Expression (Expr)
 import qualified Language.Expression as Full
-import Language.Haskell.TH.Syntax
+import           Language.Haskell.TH.Syntax
 
 data Two = One | Two
   deriving (Eq,Ord)
@@ -23,12 +22,14 @@ instance Show Two where
 
 data GroundExpr a where
   Var :: Seq Two -> GroundExpr a
-  Const :: (Lift a, Show a) => a -> GroundExpr a
+  Const :: (Show a, Lift a) => a -> GroundExpr a
 
   If :: GroundExpr Bool -> GroundExpr a -> GroundExpr a -> GroundExpr a
 
   App :: GroundExpr (a -> b) -> GroundExpr a -> GroundExpr b
   Fun :: Text -> Q (TExp (a -> b)) -> GroundExpr (a -> b)
+
+-- deriving instance Show (GroundExpr a)
 
 data Floor a where
   Inj :: Floor a -> Floor b -> Floor (a,b)
@@ -55,8 +56,7 @@ lowerExpr = go S.empty
       Full.Var -> Var addr
       Full.Const c -> Const c
       Full.App e1 e2 -> App (go addr e1) (go addr e2)
-      Full.Fun f q -> Fun f q
-      Full.If e1 e2 e3 -> If (go addr e1) (go addr e2) (go addr e3)
+      Full.Fun n f -> Fun n f
       _ -> error "did not expect injection at this point"
 
     coerceLeft :: GroundExpr (a,b) -> GroundExpr a

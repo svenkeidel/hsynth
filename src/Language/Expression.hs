@@ -50,7 +50,7 @@ optimizeExpr e = case e of
 newtype Function a b = Function (Expr a -> Expr b)
 
 instance Show (Function a b) where
-  show (Function f) = show $ f Var
+  show (Function f) = show $ optimizeExpr $ f Var
 
 instance Category Function where
   id = Function id

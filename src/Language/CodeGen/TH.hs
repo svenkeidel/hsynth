@@ -4,23 +4,24 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 module Language.CodeGen.TH where
 
 import           Prelude hiding (fst,snd)
 
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
-import           Data.Map (Map)
+import           Data.Maybe
 
 import           Language.Haskell.TH.Syntax hiding (lookupName)
 import           Language.Haskell.TH.Ppr
 import           Language.Expression
 import           Language.SynArrow
-import           Language.SimpleExpression (SimpleExpr,CompressedSimpleExpr(..),Decide(..),merge)
+import           Language.SimpleExpression (SimpleExpr,CompressedSimpleExpr(..),Decide(..))
 import qualified Language.SimpleExpression as Simple
 import           Language.GroundExpr (GroundExpr,Floor,Two(..))
 import qualified Language.GroundExpr as G
+
+import           Text.Printf
 
 compile :: SynArrow SimpleExpr Function a b -> Q Exp
 compile f = case optimize f of
@@ -30,7 +31,7 @@ compile f = case optimize f of
 
 abstractSyntax :: SynArrow SimpleExpr Function a b -> IO ()
 abstractSyntax f = case optimize f of
-  LoopD _ (Function g) -> print (optimizeExpr (g Var))
+  LoopD i (Function g) -> print (i, (optimizeExpr (g Var)))
   g -> error $ "optimize did not produce normal form: " ++ show g
 
 prettyPrint :: Q Exp -> IO ()
@@ -47,85 +48,128 @@ reifyCompressedSimpleExp :: CompressedSimpleExpr a -> Q Exp
 reifyCompressedSimpleExp expr = case expr of
   CInj e1 e2 -> [| ($(reifyCompressedSimpleExp e1),$(reifyCompressedSimpleExp e2) ) |]
   CConst c -> [| c |]
-  CUnit -> [| () |]
 
-data Pattern a where
-  Tuple :: Pattern a -> Pattern b -> Pattern (a,b)
-  Variable :: (Maybe Name) -> Name -> Pattern a
-deriving instance (Show (Pattern a))
+data Pattern where
+  Tuple :: Pattern -> Pattern -> Pattern
+  Variable :: Name -> Pattern
+deriving instance (Show Pattern)
 
-data CompressedPattern a where
-  CTuple :: CompressedPattern a -> CompressedPattern b -> CompressedPattern (a,b)
-  CVariable :: Name -> Name -> CompressedPattern a
-deriving instance (Show (CompressedPattern a))
+topPattern :: Floor a -> Q Pattern
+topPattern flr = do
+  n <- newName "x"
+  goFloor flr (Variable n)
+  where
+    goFloor :: Floor a -> Pattern -> Q Pattern
+    goFloor (G.Inj f1 f2) ip = goFloor f1 ip >>= goFloor f2
+    goFloor (G.Floor _ gexp) ip = goGExp gexp ip
 
-compressPattern :: Pattern a -> Decide CompressedPattern
-compressPattern pat = case pat of
-  Variable (Just n1) n2 -> Yes (CVariable n1 n2)
-  Variable Nothing _ -> No
-  Tuple p1 p2 -> merge (\p1' p2' -> Yes (CTuple p1' p2')) (compressPattern p1) (compressPattern p2)
+    goGExp :: GroundExpr a -> Pattern -> Q Pattern
+    goGExp (G.Var n) ip = extendInputPattern n ip
+    goGExp (G.App e1 e2) ip = goGExp e1 ip >>= goGExp e2
+    goGExp _ ip = return ip
 
-reifyPattern :: SimpleExpr a -> Q (Pattern a)
-reifyPattern expr = case expr of
-  Simple.Inj e1 e2 -> Tuple <$> reifyPattern e1 <*> reifyPattern e2
-  Simple.Fix -> do
-    c <- newName "x"
-    return $ Variable Nothing c
-  _ -> do
-    a <- newName "x"
-    b <- newName "x"
-    return $ Variable (Just a) b
+    extendInputPattern :: Seq Two -> Pattern -> Q Pattern
+    extendInputPattern name ip = case (S.viewl name,ip) of
+      (One S.:< name', Tuple p1 p2) -> Tuple <$> extendInputPattern name' p1 <*> pure p2
+      (Two S.:< name', Tuple p1 p2) -> Tuple <$> pure p1 <*> extendInputPattern name' p2
+      (_ S.:< _, Variable _) -> do
+        n1 <- newName "x"
+        n2 <- newName "x"
+        extendInputPattern name (Tuple (Variable n1) (Variable n2))
+      (S.EmptyL, _) -> return ip
 
-inputPattern :: CompressedPattern a -> Pat
-inputPattern pat = case pat of
-  CTuple p1 p2 -> TupP $ [inputPattern p1, inputPattern p2]
-  CVariable n _ -> VarP n
+reifyInputPattern :: Pattern -> Pat
+reifyInputPattern pat = case pat of
+  Tuple p1 p2 -> TupP $ [reifyInputPattern p1, reifyInputPattern p2]
+  Variable n -> VarP n
 
-letPattern :: Pattern a -> Pat
-letPattern pat = case pat of
-  Tuple p1 p2 -> TupP $ [letPattern p1, letPattern p2]
-  Variable _ n -> VarP n
+bottomPattern :: Floor a -> Q Pattern
+bottomPattern expr = case expr of
+  G.Inj e1 e2 -> Tuple <$> bottomPattern e1 <*> bottomPattern e2
+  _ -> Variable <$> newName "x"
 
-outputExpr :: Pattern a -> Exp
-outputExpr pat = case pat of
-  Tuple p1 p2 -> TupE [outputExpr p1, outputExpr p2]
-  Variable _ n -> VarE n
+merge :: (a -> a -> Maybe a) -> Maybe a -> Maybe a -> Maybe a
+merge f m1 m2 = case (m1,m2) of
+ (Nothing,Nothing) -> Nothing
+ (Nothing, Just m2') -> Just m2'
+ (Just m1', Nothing) -> Just m1'
+ (Just m1',Just m2') -> f m1' m2'
 
-reifyFunction :: forall a b c. SimpleExpr c -> Function (a,c) (b,c) -> Q Exp
+reducePattern :: SimpleExpr b -> Pattern -> Pattern
+reducePattern s0 pat0 = case pat0 of
+    (Tuple p10 p20) -> fromMaybe pat0 $ Tuple p10 <$> (go s0 p20)
+    p -> p
+  where
+    go :: SimpleExpr a -> Pattern -> Maybe Pattern
+    go s p = case (s,p) of
+      (Simple.Inj e1 e2,Tuple p1 p2) ->
+        merge (\p1' p2' -> Just (Tuple p1' p2')) (go e1 p1) (go e2 p2)
+      (Simple.Fix, _) -> Nothing
+      (_,pat) -> Just pat
+
+fixPattern :: SimpleExpr b -> Pattern -> Pattern -> Pattern
+fixPattern expr0 ip0 op0 = case (ip0, op0) of
+  (Tuple ip1 ip2,Tuple _ op2) -> Tuple ip1 (go expr0 ip2 op2)
+  (_,_) -> error "Input and output patterns have to be tuples"
+  where
+    go :: SimpleExpr b -> Pattern -> Pattern -> Pattern
+    go expr ip op = case (expr,ip,op) of
+      (Simple.Inj e1 e2,Tuple ip1 ip2, Tuple op1 op2) ->
+        Tuple (go e1 ip1 op1) (go e2 ip2 op2)
+      (Simple.Fix, _, _) -> op
+      (_, _, _) -> ip
+
+combine :: Pattern -> Pattern -> Pattern
+combine p10 p20 = case (p10,p20) of
+  (Tuple p11 p12,Tuple p21 p22) -> Tuple (combine p11 p21) (combine p12 p22)
+  (Variable {}, Tuple {}) -> p20
+  (Tuple {}, Variable {}) -> p10
+  (Variable {}, Variable {}) -> p10
+
+reifyLetPattern :: Pattern -> Pat
+reifyLetPattern pat = case pat of
+  Tuple p1 p2 -> TupP $ [reifyLetPattern p1, reifyLetPattern p2]
+  Variable n -> VarP n
+
+reifyOutputExpr :: Pattern -> Exp
+reifyOutputExpr pat = case pat of
+  Tuple p1 p2 -> TupE [reifyOutputExpr p1, reifyOutputExpr p2]
+  Variable n -> VarE n
+
+reifyFunction :: SimpleExpr c -> Function (a,c) (b,c) -> Q Exp
 reifyFunction e (Function f) = do
-  pat <- reifyPattern e
-  a <- newName "x"
-  b <- newName "x"
-  let pat' = Tuple (Variable (Just a) b) pat :: Pattern (a,c)
-  Yes inpat <- return $ compressPattern pat'
-  f' <- reifyFloor pat' $ G.floor $ f Var
-  return $ LamE [inputPattern inpat]
-         $ LetE [ValD (letPattern pat')
-                      (NormalB (unType f')) []
-                ] (outputExpr pat')
+  let flr = G.floor $ f Var
+  input <- topPattern flr
+  combined <- combine <$> topPattern flr <*> bottomPattern flr
+  f' <- reifyFloor (fixPattern e input combined) flr
+  return $ LamE [reifyInputPattern (reducePattern e input)]
+         $ LetE [ValD (reifyLetPattern combined)
+                      (NormalB f') []
+                ] (reifyOutputExpr (reducePattern e combined))
 
-type Names = Map (Seq Two) Name
-
-reifyFloor :: Pattern a -> Floor b -> Q (TExp b)
+reifyFloor :: Pattern -> Floor b -> Q Exp
 reifyFloor pat flr = case flr of
-  G.Inj f1 f2 -> [|| ( $$(reifyFloor pat f1), $$(reifyFloor pat f2) ) ||]
+  G.Inj f1 f2 -> [| ( $(reifyFloor pat f1), $(reifyFloor pat f2) ) |]
   G.Floor _ e -> reifyExpr pat e
 
-lookupName :: Pattern a -> Seq Two -> Name
+iff :: Bool -> a -> a -> a
+iff x e1 e2 = if x then e1 else e2
+{-# INLINE iff #-}
+
+reifyExpr :: Pattern -> GroundExpr b -> Q Exp
+reifyExpr pat = go
+  where
+    go :: GroundExpr a -> Q Exp
+    go expr = case expr of
+      G.Var n -> return (VarE (lookupName pat n))
+      G.Const c -> [| c |]
+      G.Fun _ q -> unType <$> q
+      G.App e1 e2 -> [| $(go e1) $(go e2) |]
+      G.If e1 e2 e3 -> [| if $(go e1) then $(go e2) else $(go e3) |]
+
+lookupName :: Pattern -> Seq Two -> Name
 lookupName pat name = case (pat,S.viewl name) of
                    (Tuple l _, One S.:< rest) -> lookupName l rest
                    (Tuple _ r, Two S.:< rest) -> lookupName r rest
-                   (Variable Nothing n, _) -> n
-                   (Variable (Just n) _, _) -> n
-                   (Tuple{}, S.EmptyL) -> error (show pat)
-
-reifyExpr :: Pattern a -> GroundExpr b -> Q (TExp b)
-reifyExpr pat = go
-  where
-    go :: GroundExpr a -> Q (TExp a)
-    go expr = case expr of
-      G.Var n -> unsafeTExpCoerce (return (VarE (lookupName pat n)))
-      G.Const c -> [|| c ||]
-      G.Fun _ q -> q
-      G.App e1 e2 -> [|| $$(go e1) $$(go e2) ||]
-      G.If e1 e2 e3 -> [|| if $$(go e1) then $$(go e2) else $$(go e3) ||]
+                   (Variable n, _) -> n
+                   (Tuple{}, S.EmptyL) -> error $ printf "lookupName failed on pattern %s" (show pat)

@@ -1,10 +1,13 @@
 module Data.Stream
   ( Stream(..)
+  , head
+  , tail
   , map
   , mapMaybe
   , switch
   , scan
   , unfold
+  , unfold'
   , iterate
   , repeat
   , zip
@@ -13,16 +16,9 @@ module Data.Stream
   , splitAt
   , (!!)
   , (<:>)
-  -- , Reactive(..)
-  -- , unfoldR
-  -- , supply
-  -- , react
-  -- , reacting
-  , Streamable(..)
   ) where
 
 import Prelude hiding ((!!),iterate,zipWith,zipWith3,head,tail,repeat,take,splitAt,map,zip)
-import Control.Arrow
 
 -- Stream a isomorphic to Cofree Identity a
 data Stream a = Cons !a (Stream a)
@@ -31,6 +27,12 @@ data Stream a = Cons !a (Stream a)
 (<:>) = Cons
 infixr 5 <:>
 {-# INLINE (<:>) #-}
+
+head :: Stream a -> a
+head (Cons a _) = a
+
+tail :: Stream a -> Stream a
+tail (Cons _ as) = as
 
 map :: (a -> b) -> Stream a -> Stream b
 map f (Cons x xs) = Cons (f x) (map f xs)
@@ -117,6 +119,9 @@ scan :: (b -> a -> b) -> b -> Stream a -> Stream b
 scan f b (Cons a as) = Cons b (scan f (f b a) as)
 {-# NOINLINE scan #-}
 
+unfold' :: (s,((),s) -> (a,s)) -> Stream a
+unfold' (s,f) = unfold (\s' -> f ((),s')) s
+
 unfold :: (s -> (a,s)) -> s -> Stream a
 unfold f s0 =
   let (a,s) = f s0
@@ -153,48 +158,3 @@ splitAt 0 xs          = ([],xs)
 splitAt n (Cons x xs) =
   let (l,ys) = splitAt (n-1) xs
   in (x:l,ys)
-
-{-# RULES
-"zip/unfold/elim"  forall f g z0 z1. zip (unfold f z0) (unfold g z1) = unfold (\(s0,s1) -> let (a,s0') = f s0; (b,s1') = g s1 in ((a,b),(s0',s1'))) (z0,z1)
-"zip/unfold/left"  forall f g z0 z1 as. zip (unfold f z0) (zip (unfold g z1) as) = map (\((a,b),c) -> (a,(b,c))) (zip (zip (unfold f z0) (unfold g z1)) as)
-"zip/unfold/right" forall f g z0 z1 as. zip (unfold f z0) (zip as (unfold g z1)) = map (\((b,c),a) -> (b,(a,c))) (zip (zip (unfold f z0) (unfold g z1)) as)
-"zip/fmap/left"    forall f as bs. zip (map f as) bs = map (first f) (zip as bs)
-"zip/fmap/right"   forall f as bs. zip as (map f bs) = map (second f) (zip as bs)
-"map/map"          forall f g as. map f (map g as) = map (f . g) as
-"map/id"           forall as. map id as = as
-"scan/fmap"        forall f g as z. scan f z (map g as) = scan (\a b -> f a (g b)) z as
-"scan/scan"        forall f g as z0 z1. scan f z0 (scan g z1 as) = map fst $ scan (\(a,b) c -> let gbc = g b c in (f a gbc,gbc)) (z0,z1) as
-"scan/zip/left"    forall f z0 as bs. zip (scan f z0 as) bs = scan (\(s,_) (a,b) -> (f s a,b)) (z0,head bs) (zip as bs)
-"scan/zip/right"   forall f z0 as bs. zip as (scan f z0 bs) = scan (\(_,s) (a,b) -> (a,f s b)) (head as,z0) (zip as bs)
-  #-}
-
--- Reactive m a isomorphic to Cofree (Product ((->) m) Identity) a
--- data Reactive m a = Reactive a (Reactive m a) (m -> Reactive m a)
-
--- unfoldR :: (s -> (a,s)) -> (m -> s -> s) -> s -> Reactive m a
--- unfoldR f ms s0 =
---   let (a,s) = f s0
---   in Reactive a (unfoldR f ms s) (\m -> unfoldR f ms (ms m s0))
-
--- supply :: [(Int,m)] -> Reactive m a -> Stream a
--- supply ((0,m):rs) (Reactive _ _ re)  = supply rs (re m)
--- supply ((n,m):rs) (Reactive a as _)     = Cons a (supply ((n-1,m):rs) as)
--- supply []         (Reactive a as _)     = Cons a (supply [] as)
-
--- react :: m -> Reactive m a -> Reactive m a
--- react m (Reactive _ _ f) = f m
-
--- reacting :: Foldable f => f m -> Reactive m a -> Reactive m a
--- reacting m r = foldr react r m
-
-class Streamable s where
-  head :: s a -> a
-  tail :: s a -> s a
-
-instance Streamable Stream where
-  head (Cons a _)  = a
-  tail (Cons _ as) = as
-
--- instance Streamable (Reactive m) where
---   head (Reactive a _ _)  = a
---   tail (Reactive _ as _) = as

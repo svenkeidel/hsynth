@@ -10,6 +10,7 @@ copyright:           Copyright (c) 2015, Sven Keidel
 category:            Language
 build-type:          Simple
 cabal-version:       >=1.10
+tested-with:         GHC >= 7.10
 
 flag jack
   description: Enable Jack support
@@ -19,21 +20,30 @@ flag examples
   description: Enable examples
   default:     False
 
+flag plot
+  description: Enable functionality for plotting audio Signals
+  default:     False
+
 library
   exposed-modules:     Data.MidiFile,
                        Data.MidiMessage,
                        Data.MidiManufacturer,
                        Data.SMPTE,
                        Language.Frontend
+                       Data.Stream,
+                       Sound.Amplifier,
                        Sound.Sine,
+                       Sound.Saw,
                        Sound.Types
   other-modules:       Data.MidiManufacturerTH,
-                       Language.Expression,
+                       Language.Expression
                        Language.SimpleExpression,
                        Language.GroundExpr,
                        Language.Function,
                        Language.SynArrow,
-                       Language.CodeGen.TH
+                       Language.CodeGen.TH,
+                       Data.MidiManufacturerTH
+
   build-depends:       base >=4 && <5,
                        cassava,
                        mtl,
@@ -43,13 +53,20 @@ library
                        binary,
                        bytestring,
                        unix,
-                       template-haskell
+                       template-haskell,
+                       ghc-prim
 
   ghc-options:         -Wall -O2 -threaded
 
   if flag(jack)
     pkgconfig-depends: jack
     exposed-modules:   Sound.Driver.Jack
+
+  if flag(plot)
+    build-depends:     plot,
+                       plot-gtk,
+                       hmatrix
+    exposed-modules:   Sound.Plot
 
   hs-source-dirs:      src
   default-language:    Haskell2010
@@ -61,6 +78,7 @@ executable example-jack
                        hsynth
   else
     buildable:         False
+  ghc-options:         -Wall -O2 -threaded
   default-language:    Haskell2010
 
 test-suite specs
@@ -73,4 +91,14 @@ test-suite specs
                        bytestring,
                        hsynth,
                        hspec
+  default-language:    Haskell2010
+
+benchmark bench
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      bench
+  main-is:             Main.hs
+  build-depends:       base,
+                       criterion,
+                       ghc-prim
+  ghc-options:         -Wall -O2 -threaded
   default-language:    Haskell2010
