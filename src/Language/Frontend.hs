@@ -5,10 +5,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Language.Frontend
- ( SynArrow(Arr), arr, first, second, (***), (&&&), (>>>), (<<<)
- , loop, loopD, init, Category (..)
+ ( SynArrow(Arr), arr, arr', first, second, (***), (&&&), (>>>), (<<<)
+ , loop, loopD, init, Category (..), mix
 
- , unfold, scan, integral
+ , unfold, scan, integral, uncurry, uncurryD
 
  , true, false, (==), (/=), Expr(If)
  , (<), (<=), (>), (>=)
@@ -24,7 +24,7 @@ module Language.Frontend
  )
 where
 
-import           Prelude hiding ((.),id,init,(==),(/=),(<),(<=),(>=),(>))
+import           Prelude hiding ((.),id,init,uncurry,(==),(/=),(<),(<=),(>=),(>))
 
 import qualified Prelude as P
 
@@ -69,7 +69,10 @@ showsSignal d e = case e of
     compose_prec = 1
 
 arr :: (Syntax a, Syntax b) => (a -> b) -> Signal (Internal a) (Internal b)
-arr = Arr . Function . lowerFun
+arr = arr' . lowerFun
+
+arr' :: (Expr a -> Expr b) -> Signal a b
+arr' = Arr . Function
 
 first :: Signal b c -> Signal (b,d) (c,d)
 first = First
@@ -105,6 +108,21 @@ integral rate = scan (\(i,x) -> i + x * double dt) 0
 
 init :: i b -> SynArrow i a b b
 init = Init
+
+uncurry :: Syntax (a,b) => (a -> b -> c) -> Expr (Internal a,Internal b) -> c
+uncurry f = P.uncurry f . externalize
+
+mix :: (Syntax b, Syntax c) => (b -> b -> c) -> Signal a (Internal b) -> Signal a (Internal b) -> Signal a (Internal c)
+mix f a b = (a &&& b) >>> arr (\(a',b') -> f a' b')
+
+(>+<) ::  (Syntax b, Num b) => Signal a (Internal b) -> Signal a (Internal b) -> Signal a (Internal b)
+(>+<) = mix (+)
+
+-- (>*<) :: Signal a Double -> Signal a Double -> Signal a Double
+-- (>*<) = mix (*)
+
+uncurryD :: (Expr Double -> Expr Double -> Expr Double) -> Expr (Double,Double) -> Expr Double
+uncurryD = uncurry
 
 true :: Expr Bool
 true = Const True
@@ -155,7 +173,9 @@ class Syntax a where
 
 instance (Syntax a, Syntax b) => Syntax (a,b) where
   type Internal (a,b) = (Internal a, Internal b)
+  -- internalize :: (a,b) -> Expr (Internal a, Internal b)
   internalize (e1,e2) = Inj (internalize e1) (internalize e2)
+  -- externalize :: Expr (Internal a, Internal b) -> (a,b)
   externalize expr = (externalize (Proj1 expr), externalize (Proj2 expr))
 
 instance Syntax (Expr ()) where

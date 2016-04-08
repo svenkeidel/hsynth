@@ -57,7 +57,8 @@ lowerExpr = go S.empty
       Full.Const c -> Const c
       Full.App e1 e2 -> App (go addr e1) (go addr e2)
       Full.Fun n f -> Fun n f
-      _ -> error "did not expect injection at this point"
+      Full.If e1 e2 e3 -> If (go addr e1) (go addr e2) (go addr e3)
+      Full.Inj {} -> error $ "did not expect injection at this point: " ++ show expr
 
     coerceLeft :: GroundExpr (a,b) -> GroundExpr a
     coerceLeft (Var v) = Var v

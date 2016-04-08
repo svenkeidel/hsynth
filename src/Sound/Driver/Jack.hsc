@@ -1,5 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Sound.Driver.Jack where
 
 import           Control.Concurrent.MVar
@@ -278,7 +279,7 @@ runAudioFun (s0,f) = do
 
       jackStartup client
 
-store :: AudioFun a -> Ptr CFloat -> NFrames -> a -> IO a
+store :: forall a. AudioFun a -> Ptr CFloat -> NFrames -> a -> IO a
 store f buf len = go 0
   where
     go :: Int -> a -> IO a
