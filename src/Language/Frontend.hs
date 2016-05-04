@@ -6,14 +6,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Language.Frontend
  ( SynArrow(Arr), arr, arr', first, second, (***), (&&&), (>>>), (<<<)
- , loop, loopD, init, Category (..), mix
+ , loop, loopD, init, Category (..)
 
- , unfold, scan, integral, uncurry, uncurryD
+
+ , unfold, scan, integral, uncurry, uncurryD, mix
 
  , true, false, (==), (/=), Expr(If)
- , (<), (<=), (>), (>=)
+ , (<), (<=), (>), (>=), (>+<), (>*<)
 
- , double, fromIntegral , Num(..), Fractional(..), Floating(..)
+ , double, fromIntegral , Num(..), Fractional(..), Floating(..), RealFrac(..)
 
  , Syntax (..)
  , SimpleSyntax (..)
@@ -82,9 +83,11 @@ second f = Arr swap >>> first f >>> Arr swap
 
 (***) :: Signal b c -> Signal b' c' -> Signal (b,b') (c,c')
 f *** g = first f >>> second g
+infixr 3 ***
 
 (&&&) :: Signal b c -> Signal b c' -> Signal b (c,c')
 f &&& g = Arr dup >>> f *** g
+infixr 3 &&&
 
 loop :: Signal (b,d) (c,d) -> Signal b c
 loop = Loop
@@ -112,14 +115,16 @@ init = Init
 uncurry :: Syntax (a,b) => (a -> b -> c) -> Expr (Internal a,Internal b) -> c
 uncurry f = P.uncurry f . externalize
 
-mix :: (Syntax b, Syntax c) => (b -> b -> c) -> Signal a (Internal b) -> Signal a (Internal b) -> Signal a (Internal c)
+mix :: (Expr Double -> Expr Double -> Expr Double) -> Signal a Double -> Signal a Double -> Signal a Double
 mix f a b = (a &&& b) >>> arr (\(a',b') -> f a' b')
 
-(>+<) ::  (Syntax b, Num b) => Signal a (Internal b) -> Signal a (Internal b) -> Signal a (Internal b)
+(>+<) :: Signal a Double -> Signal a Double -> Signal a Double
 (>+<) = mix (+)
+infixl 6 >+<
 
--- (>*<) :: Signal a Double -> Signal a Double -> Signal a Double
--- (>*<) = mix (*)
+(>*<) :: Signal a Double -> Signal a Double -> Signal a Double
+(>*<) = mix (*)
+infixl 7 >*<
 
 uncurryD :: (Expr Double -> Expr Double -> Expr Double) -> Expr (Double,Double) -> Expr Double
 uncurryD = uncurry
@@ -135,21 +140,27 @@ double = Const
 
 (==) :: Eq a => Expr a -> Expr a -> Expr Bool
 (==) = fun2 "(==)" [|| (P.==) ||]
+infix 4 ==
 
 (/=) :: Eq a => Expr a -> Expr a -> Expr Bool
 (/=) = fun2 "(==)" [|| (P./=) ||]
+infix 4 /=
 
 (<) :: Ord a => Expr a -> Expr a -> Expr Bool
 (<) = fun2 "(<)" [|| (P.<) ||]
+infix 4 <
 
 (<=) :: Ord a => Expr a -> Expr a -> Expr Bool
 (<=) = fun2 "(<=)" [|| (P.<=) ||]
+infix 4 <=
 
 (>) :: Ord a => Expr a -> Expr a -> Expr Bool
 (>) = fun2 "(>)" [|| (P.>) ||]
+infix 4 >
 
 (>=) :: Ord a => Expr a -> Expr a -> Expr Bool
 (>=) = fun2 "(>=)" [|| (P.>=) ||]
+infix 4 >=
 
 class SimpleSyntax a where
   simpleExpr :: a -> SimpleExpr a
