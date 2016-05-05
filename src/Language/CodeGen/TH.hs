@@ -8,9 +8,12 @@ module Language.CodeGen.TH where
 
 import           Prelude hiding (fst,snd)
 
+import           Data.Set (Set)
+import qualified Data.Set as Set
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
 import           Data.Maybe
+import           Data.Monoid
 
 import           Language.Haskell.TH.Syntax hiding (lookupName)
 import           Language.Haskell.TH.Ppr
@@ -31,7 +34,7 @@ compile f = case optimize f of
 
 abstractSyntax :: SynArrow SimpleExpr Function a b -> IO ()
 abstractSyntax f = case optimize f of
-  LoopD i (Function g) -> print (i, (optimizeExpr (g Var)))
+  LoopD i (Function g) -> print (i, optimizeExpr (g Var))
   g -> error $ "optimize did not produce normal form: " ++ show g
 
 prettyPrint :: Q Exp -> IO ()
@@ -78,10 +81,13 @@ topPattern flr = do
         extendInputPattern name (Tuple (Variable n1) (Variable n2))
       (S.EmptyL, _) -> return ip
 
-reifyInputPattern :: Pattern -> Pat
-reifyInputPattern pat = case pat of
-  Tuple p1 p2 -> TupP $ [reifyInputPattern p1, reifyInputPattern p2]
-  Variable n -> VarP n
+reifyInputPattern :: Pattern -> Set Name -> Pat
+reifyInputPattern pat fv = case pat of
+  Tuple p1 p2 -> TupP [reifyInputPattern p1 fv, reifyInputPattern p2 fv]
+  -- If the name is not used in the expression, do not bind the name
+  -- to avoid "unused variable warnings" in genereated code
+  Variable n | n `Set.member` fv -> VarP n
+             | otherwise -> WildP
 
 bottomPattern :: Floor a -> Q Pattern
 bottomPattern expr = case expr of
@@ -97,7 +103,7 @@ merge f m1 m2 = case (m1,m2) of
 
 reducePattern :: SimpleExpr b -> Pattern -> Pattern
 reducePattern s0 pat0 = case pat0 of
-    (Tuple p10 p20) -> fromMaybe pat0 $ Tuple p10 <$> (go s0 p20)
+    (Tuple p10 p20) -> fromMaybe pat0 $ Tuple p10 <$> go s0 p20
     p -> p
   where
     go :: SimpleExpr a -> Pattern -> Maybe Pattern
@@ -128,7 +134,7 @@ combine p10 p20 = case (p10,p20) of
 
 reifyLetPattern :: Pattern -> Pat
 reifyLetPattern pat = case pat of
-  Tuple p1 p2 -> TupP $ [reifyLetPattern p1, reifyLetPattern p2]
+  Tuple p1 p2 -> TupP [reifyLetPattern p1, reifyLetPattern p2]
   Variable n -> VarP n
 
 reifyOutputExpr :: Pattern -> Exp
@@ -142,19 +148,28 @@ reifyFunction e (Function f) = do
   input <- topPattern flr
   combined <- combine <$> topPattern flr <*> bottomPattern flr
   f' <- reifyFloor (fixPattern e input combined) flr
-  return $ LamE [reifyInputPattern (reducePattern e input)]
+  return $ LamE [reifyInputPattern (reducePattern e input) (freeVars input flr)]
          $ LetE [ValD (reifyLetPattern combined)
                       (NormalB f') []
                 ] (reifyOutputExpr (reducePattern e combined))
+
+freeVars :: Pattern -> Floor b -> Set Name
+freeVars pat flr = case flr of
+  G.Inj f1 f2 -> freeVars pat f1 <> freeVars pat f2
+  G.Floor _ e -> go e
+  where
+    go :: GroundExpr a -> Set Name
+    go expr = case expr of
+      G.Var n -> Set.singleton (lookupName pat n)
+      G.Const {} -> Set.empty
+      G.Fun {} -> Set.empty
+      G.App e1 e2 -> go e1 <> go e2
+      G.If e1 e2 e3 -> go e1 <> go e2 <> go e3
 
 reifyFloor :: Pattern -> Floor b -> Q Exp
 reifyFloor pat flr = case flr of
   G.Inj f1 f2 -> [| ( $(reifyFloor pat f1), $(reifyFloor pat f2) ) |]
   G.Floor _ e -> reifyExpr pat e
-
-iff :: Bool -> a -> a -> a
-iff x e1 e2 = if x then e1 else e2
-{-# INLINE iff #-}
 
 reifyExpr :: Pattern -> GroundExpr b -> Q Exp
 reifyExpr pat = go
@@ -166,6 +181,10 @@ reifyExpr pat = go
       G.Fun _ q -> unType <$> q
       G.App e1 e2 -> [| $(go e1) $(go e2) |]
       G.If e1 e2 e3 -> [| if $(go e1) then $(go e2) else $(go e3) |]
+
+iff :: Bool -> a -> a -> a
+iff x e1 e2 = if x then e1 else e2
+{-# INLINE iff #-}
 
 lookupName :: Pattern -> Seq Two -> Name
 lookupName pat name = case (pat,S.viewl name) of
