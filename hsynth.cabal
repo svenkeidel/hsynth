@@ -29,11 +29,14 @@ library
                        Data.MidiMessage,
                        Data.MidiManufacturer,
                        Data.SMPTE,
-                       Language.Frontend
+                       Language.Frontend,
                        Data.Stream,
                        Sound.Amplifier,
-                       Sound.Sine,
-                       Sound.Saw,
+                       Sound.Oscillators,
+                       Sound.Oscillators.Saw,
+                       Sound.Oscillators.Sine,
+                       Sound.Oscillators.Square,
+                       Sound.Oscillators.Triangle,
                        Sound.Types
   other-modules:       Data.MidiManufacturerTH,
                        Language.Expression

@@ -1,4 +1,4 @@
-module Sound.Saw where
+module Sound.Oscillators.Saw where
 
 import           Prelude ()
 import           Language.Frontend

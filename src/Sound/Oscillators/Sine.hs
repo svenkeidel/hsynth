@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
-module Sound.Sine where
+module Sound.Oscillators.Sine where
 
 import           Prelude ()
 import           Language.Frontend
