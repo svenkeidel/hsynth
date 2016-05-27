@@ -9,4 +9,4 @@ import           Language.Frontend
 
 main :: IO ()
 main = do
-  Driver.runAudioFun $(compile (triangle 440 48000 >>> amp 0.1))
+  Driver.runAudioFun $(compile (square 440 48000 >>> amp 0.1))

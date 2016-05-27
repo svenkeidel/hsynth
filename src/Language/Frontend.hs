@@ -8,13 +8,15 @@ module Language.Frontend
  ( SynArrow(Arr), arr, arr', first, second, (***), (&&&), (>>>), (<<<)
  , loop, loopD, init, Category (..)
 
+ , Expr
 
  , unfold, scan, integral, uncurry, uncurryD, mix
 
- , true, false, (==), (/=), Expr(If)
+ , true, false, cond, (==), (/=)
  , (<), (<=), (>), (>=), (>+<), (>*<)
 
  , double, fromIntegral , Num(..), Fractional(..), Floating(..), RealFrac(..)
+ , int
 
  , Syntax (..)
  , SimpleSyntax (..)
@@ -22,6 +24,8 @@ module Language.Frontend
  , Signal, SimpleExpr, Double, Int, Bool
 
  , compile, prettyPrint, abstractSyntax, showSignal
+
+ , undefined
  )
 where
 
@@ -138,6 +142,12 @@ false = Const False
 double :: Double -> Expr Double
 double = Const
 
+int :: Int -> Expr Int
+int = Const
+
+cond :: Syntax a => Expr Bool -> a -> a -> a
+cond a b c = externalize (If a (internalize b) (internalize c))
+
 (==) :: Eq a => Expr a -> Expr a -> Expr Bool
 (==) = fun2 "(==)" [|| (P.==) ||]
 infix 4 ==
@@ -171,6 +181,9 @@ instance (SimpleSyntax a, SimpleSyntax b) => (SimpleSyntax (a,b)) where
 instance SimpleSyntax Double where
   simpleExpr = S.Const
 
+instance SimpleSyntax Int where
+  simpleExpr = S.Const
+
 instance SimpleSyntax Bool where
   simpleExpr = S.Const
 
@@ -201,6 +214,11 @@ instance Syntax () where
 
 instance Syntax (Expr Double) where
   type Internal (Expr Double) = Double
+  internalize = id
+  externalize = id
+
+instance Syntax (Expr Int) where
+  type Internal (Expr Int) = Int
   internalize = id
   externalize = id
 
