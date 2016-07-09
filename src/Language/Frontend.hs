@@ -104,7 +104,7 @@ unfold :: (Syntax c, Syntax b, SimpleSyntax (Internal c))
        => (c -> (b,c)) -> Internal c -> Signal () (Internal b)
 unfold f s = loopD s (\((),x) -> f x)
 
-scan :: (Syntax a, Syntax b, Syntax (a,b), SimpleSyntax (Internal b))
+scan :: (Syntax b, Syntax (a,b), SimpleSyntax (Internal b))
      => ((a,b) -> b) -> Internal b -> Signal (Internal a) (Internal b)
 scan f s = loopD s (\x -> let y = f x in (y,y))
 
@@ -149,27 +149,27 @@ cond :: Syntax a => Expr Bool -> a -> a -> a
 cond a b c = externalize (If a (internalize b) (internalize c))
 
 (==) :: Eq a => Expr a -> Expr a -> Expr Bool
-(==) = fun2 "(==)" [|| (P.==) ||]
+(==) = fun2 "==" [|| (P.==) ||]
 infix 4 ==
 
 (/=) :: Eq a => Expr a -> Expr a -> Expr Bool
-(/=) = fun2 "(==)" [|| (P./=) ||]
+(/=) = fun2 "==" [|| (P./=) ||]
 infix 4 /=
 
 (<) :: Ord a => Expr a -> Expr a -> Expr Bool
-(<) = fun2 "(<)" [|| (P.<) ||]
+(<) = fun2 "<" [|| (P.<) ||]
 infix 4 <
 
 (<=) :: Ord a => Expr a -> Expr a -> Expr Bool
-(<=) = fun2 "(<=)" [|| (P.<=) ||]
+(<=) = fun2 "<=" [|| (P.<=) ||]
 infix 4 <=
 
 (>) :: Ord a => Expr a -> Expr a -> Expr Bool
-(>) = fun2 "(>)" [|| (P.>) ||]
+(>) = fun2 ">" [|| (P.>) ||]
 infix 4 >
 
 (>=) :: Ord a => Expr a -> Expr a -> Expr Bool
-(>=) = fun2 "(>=)" [|| (P.>=) ||]
+(>=) = fun2 ">=" [|| (P.>=) ||]
 infix 4 >=
 
 class SimpleSyntax a where

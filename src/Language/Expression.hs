@@ -7,14 +7,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Language.Expression where
 
-import Prelude hiding ((.),id)
+import           Prelude hiding ((.),id)
 
-import Control.Category
+import           Control.Category
 
-import Language.SynArrow
-import Language.Haskell.TH.Syntax
+import           Data.Char (isAlpha)
+
+import           Language.SynArrow
+import           Language.Haskell.TH.Syntax
 
 import           Data.Text (Text)
+import qualified Data.Text as T
 
 data Expr a where
   Var :: Expr a
@@ -36,11 +39,15 @@ optimizeExpr :: Expr a -> Expr a
 optimizeExpr e = case e of
   Proj1 (Inj e1 _) -> optimizeExpr e1
   Proj2 (Inj _ e2) -> optimizeExpr e2
+  Proj1 (If e1 e2 e3) -> optimizeExpr (If e1 (Proj1 e2) (Proj1 e3))
+  Proj2 (If e1 e2 e3) -> optimizeExpr (If e1 (Proj2 e2) (Proj2 e3))
   Proj1 e1 -> case optimizeExpr e1 of
     Inj e3 _ -> optimizeExpr e3
+    If e1' e2' e3' -> optimizeExpr (If e1' (Proj1 e2') (Proj1 e3'))
     e2 -> Proj1 e2
   Proj2 e2 -> case optimizeExpr e2 of
     Inj _ e3 -> optimizeExpr e3
+    If e1' e2' e3' -> optimizeExpr (If e1' (Proj2 e2') (Proj2 e3'))
     e1 -> Proj2 e1
   Inj e1 e2 -> Inj (optimizeExpr e1) (optimizeExpr e2)
   App e1 e2 -> App (optimizeExpr e1) (optimizeExpr e2)
@@ -76,16 +83,24 @@ instance Show (Expr a) where
   showsPrec d e = case e of
     Var -> showString "x"
     Const x -> shows x
-    Fun f _ -> shows f
+    Fun f _ -> showString (T.unpack f)
+    App (App (Fun f _) e1) e2 | T.all (not . isAlpha) f ->
+      showParen (d > app_prec) $
+        showsPrec (app_prec + 1) e1 .
+        showString " " .
+        showString (T.unpack f) .
+        showString " " .
+        showsPrec (app_prec + 1) e2
     App e1 e2 -> showParen (d > app_prec)
                $ showsPrec (app_prec + 1) e1
                . showString " "
                . showsPrec (app_prec + 1) e2
     If e1 e2 e3 -> showParen (d > app_prec)
-                 $ showsPrec (app_prec + 1) e1
-                 . showString " "
+                 $ showString "if "
+                 . showsPrec (app_prec + 1) e1
+                 . showString " then "
                  . showsPrec (app_prec + 1) e2
-                 . showString " "
+                 . showString " else "
                  . showsPrec (app_prec + 1) e3
     Inj e1 e2 -> showParen (d > app_prec)
                $ showString "("
@@ -104,16 +119,16 @@ instance Show (Expr a) where
 
 
 instance (Show a, Lift a, Num a) => Num (Expr a) where
-  (+) = fun2 "(+)" [|| (+) ||]
-  (-) = fun2 "(-)" [|| (-) ||]
-  (*) = fun2 "(*)" [|| (*) ||]
+  (+) = fun2 "+" [|| (+) ||]
+  (-) = fun2 "-" [|| (-) ||]
+  (*) = fun2 "*" [|| (*) ||]
   abs = fun1 "abs" [|| abs ||]
   signum = fun1 "signum" [|| signum ||]
   fromInteger = Const . fromIntegral
 
 instance (Show a, Lift a, Fractional a) => Fractional (Expr a) where
   fromRational = Const . fromRational
-  (/) = fun2 "(/)" [|| (/) ||]
+  (/) = fun2 "/" [|| (/) ||]
 
 instance (Show a, Lift a, Floating a) => Floating (Expr a) where
   pi = Const pi

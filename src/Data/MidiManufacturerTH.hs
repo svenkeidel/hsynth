@@ -78,7 +78,7 @@ decodeManufacturer = decodeWith DecodeOptions { decDelimiter = fromIntegral (ord
 deriveManufacturer :: [ManufacturerEntry] -> [Dec]
 deriveManufacturer manufacturers = [manufacturerData,getManufacturer1ByteDec, getManufacturer3ByteDec]
   where
-    manufacturerData = DataD [] (mkName "Manufacturer") [] (map constructor manufacturers) []
+    manufacturerData = DataD [] (mkName "Manufacturer") [] Nothing (map constructor manufacturers) []
 
     constructor (ManufacturerEntry _ (ManufacturerName name)) =
       NormalC (mkName name) []

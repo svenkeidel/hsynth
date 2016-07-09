@@ -1,4 +1,3 @@
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE GADTs #-}
 module Language.GroundExpr(GroundExpr(..),Floor(..),floor,Two(..)) where
@@ -8,6 +7,7 @@ import           Prelude hiding (floor)
 import           Data.Sequence (Seq,(<|),(|>))
 import qualified Data.Sequence as S
 import           Data.Text (Text)
+import qualified Data.Text as T
 
 import           Language.Expression (Expr)
 import qualified Language.Expression as Full
@@ -30,12 +30,43 @@ data GroundExpr a where
   Fun :: Text -> Q (TExp (a -> b)) -> GroundExpr (a -> b)
 
 -- deriving instance Show (GroundExpr a)
+instance Show (GroundExpr a) where
+  showsPrec d e = case e of
+    Var v -> showsPrec d v
+    Const a -> showsPrec d a
+    If e1 e2 e3 -> showParen (d > appPrec) $
+      showString "if " .
+      showsPrec (appPrec+1) e1 .
+      showString " " .
+      showsPrec (appPrec+1) e2 .
+      showString " " .
+      showsPrec (appPrec+1) e3
+    App e1 e2 -> showParen (d > appPrec) $
+      showsPrec (appPrec+1) e1 .
+      showString " " .
+      showsPrec (appPrec+1) e2
+    Fun t _ -> showString (T.unpack t)
+    where
+       appPrec = 10
 
 data Floor a where
   Inj :: Floor a -> Floor b -> Floor (a,b)
   Floor :: Seq Two -> GroundExpr a -> Floor a
 
---deriving instance Show a => Show (Floor a)
+instance Show (Floor a) where
+  showsPrec d e = case e of
+   Inj e1 e2 ->
+     showString "(" .
+     showsPrec appPrec e1 .
+     showString "," .
+     showsPrec appPrec e2 .
+     showString ")"
+   Floor x e1 -> showParen (d > appPrec) $
+     showsPrec (appPrec+1) x .
+     showString " <- " .
+     showsPrec (appPrec+1) e1
+   where
+       appPrec = 10 :: Int
 
 floor :: Expr a -> Floor a
 floor = go S.empty . Full.optimizeExpr
@@ -47,7 +78,7 @@ floor = go S.empty . Full.optimizeExpr
       e -> Floor to (lowerExpr e)
 
 lowerExpr :: Expr a -> GroundExpr a
-lowerExpr = go S.empty
+lowerExpr e0 = go S.empty e0
   where
     go :: Seq Two -> Expr a -> GroundExpr a
     go addr expr = case expr of
@@ -58,12 +89,12 @@ lowerExpr = go S.empty
       Full.App e1 e2 -> App (go addr e1) (go addr e2)
       Full.Fun n f -> Fun n f
       Full.If e1 e2 e3 -> If (go addr e1) (go addr e2) (go addr e3)
-      Full.Inj {} -> error $ "did not expect injection at this point: " ++ show expr
+      Full.Inj {} -> error $ "did not expect injection at this point: " ++ show expr ++ " in " ++ show e0
 
     coerceLeft :: GroundExpr (a,b) -> GroundExpr a
     coerceLeft (Var v) = Var v
-    coerceLeft _ = error "cannot coerce function that produces a tuple"
+    coerceLeft e = error $ "cannot coerce function that produces a tuple" ++ show e
 
     coerceRight :: GroundExpr (a,b) -> GroundExpr b
     coerceRight (Var v) = Var v
-    coerceRight _ = error "cannot coerce function that produces a tuple"
+    coerceRight e = error $ "cannot coerce function that produces a tuple" ++ show e

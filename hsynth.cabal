@@ -59,7 +59,7 @@ library
                        template-haskell,
                        ghc-prim
 
-  ghc-options:         -Wall -O2 -threaded
+  ghc-options:         -Wall -O2
 
   if flag(jack)
     pkgconfig-depends: jack

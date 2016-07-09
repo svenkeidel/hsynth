@@ -69,7 +69,10 @@ topPattern flr = do
     goGExp :: GroundExpr a -> Pattern -> Q Pattern
     goGExp (G.Var n) ip = extendInputPattern n ip
     goGExp (G.App e1 e2) ip = goGExp e1 ip >>= goGExp e2
-    goGExp _ ip = return ip
+    goGExp (G.If e1 e2 e3) ip = goGExp e1 ip >>= goGExp e2 >>= goGExp e3
+    goGExp G.Const {} ip = return ip
+    goGExp G.Fun {} ip = return ip
+    --goGExp _ ip = return ip
 
     extendInputPattern :: Seq Two -> Pattern -> Q Pattern
     extendInputPattern name ip = case (S.viewl name,ip) of
@@ -116,7 +119,7 @@ reducePattern s0 pat0 = case pat0 of
 fixPattern :: SimpleExpr b -> Pattern -> Pattern -> Pattern
 fixPattern expr0 ip0 op0 = case (ip0, op0) of
   (Tuple ip1 ip2,Tuple _ op2) -> Tuple ip1 (go expr0 ip2 op2)
-  (_,_) -> error "Input and output patterns have to be tuples"
+  p@(_,_) -> error $ "Input and output patterns have to be tuples, but got " ++ show p
   where
     go :: SimpleExpr b -> Pattern -> Pattern -> Pattern
     go expr ip op = case (expr,ip,op) of
