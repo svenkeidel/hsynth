@@ -1,16 +1,15 @@
 name:                hsynth
 version:             0.2.0.0
-synopsis:            Modular synthesizer for Haskell using DSLs
--- description:
+synopsis:            A audio synthesis library for Haskell
 license:             BSD3
 license-file:        LICENSE
 author:              Sven Keidel
 maintainer:          svenkeidel@gmail.com
-copyright:           Copyright (c) 2015, Sven Keidel
+copyright:           Copyright (c) 2016, Sven Keidel
 category:            Language
 build-type:          Simple
 cabal-version:       >=1.10
-tested-with:         GHC >= 7.10
+tested-with:         GHC >= 8.0
 
 flag jack
   description: Enable Jack support
