@@ -8,11 +8,11 @@
 module Language.SimpleExpression where
 
 import Language.SynArrow
-import Language.Haskell.TH.Syntax
+import Language.Constant
 
 data SimpleExpr a where
   Inj :: SimpleExpr a -> SimpleExpr b -> SimpleExpr (a,b)
-  Const :: (Lift a, Show a) => a -> SimpleExpr a
+  Const :: Constant a => a -> SimpleExpr a
   Fix :: SimpleExpr a
 
 deriving instance Show (SimpleExpr a)
@@ -24,7 +24,7 @@ instance Product SimpleExpr where
 
 data CompressedSimpleExpr a where
   CInj :: CompressedSimpleExpr a -> CompressedSimpleExpr b -> CompressedSimpleExpr (a,b)
-  CConst :: (Lift a, Show a) => a -> CompressedSimpleExpr a
+  CConst :: Constant a => a -> CompressedSimpleExpr a
 
 data Decide f where
   Yes :: f a -> Decide f

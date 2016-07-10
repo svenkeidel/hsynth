@@ -39,7 +39,8 @@ library
                        Sound.Oscillators.Triangle,
                        Sound.Types
   other-modules:       Data.MidiManufacturerTH,
-                       Language.Expression
+                       Language.Constant,
+                       Language.Expression,
                        Language.SimpleExpression,
                        Language.GroundExpr,
                        Language.Function,

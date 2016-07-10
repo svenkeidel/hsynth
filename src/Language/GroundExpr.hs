@@ -9,6 +9,7 @@ import qualified Data.Sequence as S
 import           Data.Text (Text)
 import qualified Data.Text as T
 
+import           Language.Constant
 import           Language.Expression (Expr)
 import qualified Language.Expression as Full
 import           Language.Haskell.TH.Syntax
@@ -22,7 +23,7 @@ instance Show Two where
 
 data GroundExpr a where
   Var :: Seq Two -> GroundExpr a
-  Const :: (Show a, Lift a) => a -> GroundExpr a
+  Const :: Constant a => a -> GroundExpr a
 
   If :: GroundExpr Bool -> GroundExpr a -> GroundExpr a -> GroundExpr a
 

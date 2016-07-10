@@ -13,6 +13,7 @@ import           Control.Category
 
 import           Data.Char (isAlpha)
 
+import           Language.Constant
 import           Language.SynArrow
 import           Language.Haskell.TH.Syntax
 
@@ -21,7 +22,7 @@ import qualified Data.Text as T
 
 data Expr a where
   Var :: Expr a
-  Const :: (Lift a, Show a) => a -> Expr a
+  Const :: Constant a => a -> Expr a
 
   Fun :: Text -> Q (TExp (a -> b)) -> Expr (a -> b)
   App :: Expr (a -> b) -> Expr a -> Expr b
@@ -118,7 +119,7 @@ instance Show (Expr a) where
       app_prec = 10
 
 
-instance (Show a, Lift a, Num a) => Num (Expr a) where
+instance (Constant a, Num a) => Num (Expr a) where
   (+) = fun2 "+" [|| (+) ||]
   (-) = fun2 "-" [|| (-) ||]
   (*) = fun2 "*" [|| (*) ||]
@@ -126,11 +127,11 @@ instance (Show a, Lift a, Num a) => Num (Expr a) where
   signum = fun1 "signum" [|| signum ||]
   fromInteger = Const . fromIntegral
 
-instance (Show a, Lift a, Fractional a) => Fractional (Expr a) where
+instance (Constant a, Fractional a) => Fractional (Expr a) where
   fromRational = Const . fromRational
   (/) = fun2 "/" [|| (/) ||]
 
-instance (Show a, Lift a, Floating a) => Floating (Expr a) where
+instance (Constant a, Floating a) => Floating (Expr a) where
   pi = Const pi
   exp = fun1 "exp" [|| exp ||]
   log = fun1 "log" [|| exp ||]

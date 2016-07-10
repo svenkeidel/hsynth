@@ -21,6 +21,7 @@ import           Language.Expression
 import           Language.SynArrow
 import           Language.SimpleExpression (SimpleExpr,CompressedSimpleExpr(..),Decide(..))
 import qualified Language.SimpleExpression as Simple
+import           Language.Constant
 import           Language.GroundExpr (GroundExpr,Floor,Two(..))
 import qualified Language.GroundExpr as G
 
@@ -50,7 +51,7 @@ reifySimpleExpr expr = case Simple.compressSimpleExpr expr of
 reifyCompressedSimpleExp :: CompressedSimpleExpr a -> Q Exp
 reifyCompressedSimpleExp expr = case expr of
   CInj e1 e2 -> [| ($(reifyCompressedSimpleExp e1),$(reifyCompressedSimpleExp e2) ) |]
-  CConst c -> [| c |]
+  CConst c -> SigE <$> lift c <*> pure (constantType c)
 
 data Pattern where
   Tuple :: Pattern -> Pattern -> Pattern
@@ -180,7 +181,7 @@ reifyExpr pat = go
     go :: GroundExpr a -> Q Exp
     go expr = case expr of
       G.Var n -> return (VarE (lookupName pat n))
-      G.Const c -> [| c |]
+      G.Const c -> SigE <$> lift c <*> pure (constantType c)
       G.Fun _ q -> unType <$> q
       G.App e1 e2 -> [| $(go e1) $(go e2) |]
       G.If e1 e2 e3 -> [| if $(go e1) then $(go e2) else $(go e3) |]
